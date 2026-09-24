@@ -3,6 +3,6 @@ Reproducible research workspace for historical settlement transformation and wat
 
 ## Case studies
 
-- [`case_studies/jubrakhola_river_basin/`](case_studies/jubrakhola_river_basin/) — Jubrakhola River Basin / Jubrakhola area near Birendranagar, Karnali Province, Nepal.
+- [`case_studies/jubrakhola_river_basin/`](case_studies/jhupra_river_basin/) — Jubrakhola River Basin / Jubrakhola area near Birendranagar, Karnali Province, Nepal.
 
 Case-study directories separate raw/source materials, documented observations, analysis inputs, and derived outputs. See each case-study README for scope, provenance, and limitations.
