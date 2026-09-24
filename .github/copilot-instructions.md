@@ -248,12 +248,12 @@ Do not mix raw data and generated outputs.
 
 ---
 
-# 10. JUBRAKHOLA CASE STUDY
+# 10. JHUPRAKHOLA CASE STUDY
 
 The first detailed case study is:
 
 ```text
-case_studies/jubrakhola_river_basin/
+case_studies/JhupraKhola/
 ```
 
 Treat this as an important research case study.
@@ -269,9 +269,9 @@ outputs/
 metadata/
 ```
 
-Do not assume the exact Jubrakhola basin boundary unless supported by a documented geospatial source.
+Do not assume the exact JhupraKhola basin boundary unless supported by a documented geospatial source.
 
-Preserve existing Jubrakhola material.
+Preserve existing JhupraKhola material.
 
 ---
 
@@ -495,9 +495,9 @@ Use clear filenames.
 Examples:
 
 ```text
-JUB_settlement_expansion_1995_2025.png
-JUB_river_proximity_2025.png
-JUB_historical_comparison_1995_2025.png
+JHUPRA_settlement_expansion_1995_2025.png
+JHUPRA_river_proximity_2025.png
+JHUPRA_historical_comparison_1995_2025.png
 ```
 
 Do not treat generated figures as raw research data.
@@ -569,7 +569,7 @@ Preferred examples:
 init: establish research repository structure
 data: add administrative boundary dataset
 data: add settlement inventory template
-case-study: organize Jubrakhola imagery
+case-study: organize JhupraKhola imagery
 metadata: catalog historical imagery
 analysis: add river proximity workflow
 analysis: add settlement change workflow
