@@ -1,0 +1,14 @@
+# Study-area configuration template.
+# Do not add coordinates or boundaries until they are verified and documented.
+study_area:
+  name: Karnali Province, Nepal
+  administrative_level: province
+  geometry_source: unknown
+  boundary_file: null
+  crs: unknown
+  notes: Record the authoritative source, version, date, and CRS when defined.
+case_studies:
+  - id: jubrakhola_river_basin
+    name: Jubrakhola River Basin
+    boundary_file: null
+    crs: unknown

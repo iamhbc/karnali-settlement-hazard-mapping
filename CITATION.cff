@@ -1,0 +1,11 @@
+# Citation metadata template
+# Complete author, version, release date, and identifier fields only when verified.
+cff-version: 1.2.0
+message: Please cite this repository when using its code, methods, or derived research outputs.
+title: Karnali Settlement and Water-Related Hazard Mapping
+abstract: Reproducible research workspace for historical settlement transformation and water-related hazard exposure in Karnali Province, Nepal, using remote sensing, GIS, and GeoAI.
+repository-code: https://github.com/iamhbc/karnali-settlement-hazard-mapping
+license: ""
+version: ""
+date-released: ""
+authors: []

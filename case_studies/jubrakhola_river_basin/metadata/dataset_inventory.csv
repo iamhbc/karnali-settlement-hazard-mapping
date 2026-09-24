@@ -1,2 +1,2 @@
-dataset_id,dataset_name,data_type,source,provider,acquisition_or_release_date,geographic_extent,crs,scale_or_resolution,original_filename,relative_path,processing_status,license_or_access,provenance_uri,checksum,created_by,notes
-JUB_DS_001,unknown,unknown,unknown,unknown,unknown,Jubrakhola area,unknown,unknown,unknown,geospatial_data/other_layers/,raw,unknown,unknown,unknown,unknown,
+# Dataset inventory template
+dataset_id,source_name,provider,license,source_url,acquisition_date,temporal_coverage,format,crs,relative_path,checksum,processing_status,notes

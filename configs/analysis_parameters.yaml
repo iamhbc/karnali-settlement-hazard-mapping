@@ -1,0 +1,16 @@
+# Analysis-parameter template.
+# Values are intentionally unset until justified by the research method and data.
+analysis:
+  target_crs: unknown
+  temporal_periods: []
+  river_proximity:
+    distance_units: metres
+    distances: []
+  change_detection:
+    method: to_be_defined
+    minimum_mapping_unit: unknown
+  hazard_exposure:
+    hazard_layers: []
+    exposure_layers: []
+  uncertainty:
+    confidence_scale: to_be_defined

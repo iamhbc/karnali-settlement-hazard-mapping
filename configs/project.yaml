@@ -1,0 +1,12 @@
+# Project configuration template
+# Replace placeholders only when verified project information is available.
+project:
+  name: karnali-settlement-hazard-mapping
+  description: Reproducible research workspace for historical settlement transformation and water-related hazard exposure in Karnali Province, Nepal.
+  status: research_in_progress
+  repository: iamhbc/karnali-settlement-hazard-mapping
+paths:
+  data_raw: data/raw
+  data_processed: data/processed
+  outputs: outputs
+  case_studies: case_studies

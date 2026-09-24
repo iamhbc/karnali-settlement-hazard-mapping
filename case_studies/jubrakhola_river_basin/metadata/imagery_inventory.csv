@@ -1,2 +1,2 @@
-image_id,date_or_year,source,platform_or_sensor,location,latitude,longitude,spatial_resolution,coverage_area,settlement_or_river_feature,original_filename,relative_path,processing_status,confidence_or_quality,license_or_access,provenance_uri,notes
-JUB_IMG_001,unknown,unknown,unknown,Jubrakhola area,unknown,unknown,unknown,unknown,unknown,unknown,imagery/historical/,raw,unknown,unknown,unknown,
+# Imagery inventory template
+imagery_id,source_name,provider,license,acquisition_date,year,sensor_or_product,resolution,extent,crs,relative_path,checksum,quality_notes,processing_status,notes

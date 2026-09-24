@@ -1,0 +1,14 @@
+numpy
+pandas
+geopandas
+rasterio
+rioxarray
+xarray
+shapely
+pyproj
+scipy
+scikit-learn
+matplotlib
+jupyter
+folium
+contextily

@@ -1,0 +1,19 @@
+name: karnali-settlement-hazard-mapping
+channels:
+  - conda-forge
+dependencies:
+  - python
+  - numpy
+  - pandas
+  - geopandas
+  - rasterio
+  - rioxarray
+  - xarray
+  - shapely
+  - pyproj
+  - scipy
+  - scikit-learn
+  - matplotlib
+  - jupyter
+  - folium
+  - contextily

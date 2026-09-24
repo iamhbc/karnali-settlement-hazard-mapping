@@ -1,0 +1,3 @@
+# Settlement inventory template
+# Use unknown or NA when information is unavailable or not applicable.
+settlement_id,name,administrative_unit,source,observation_date,geometry_path,confidence,notes
