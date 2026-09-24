@@ -1,4 +1,4 @@
-# Jubrakhola River Basin case study
+# Jhupra River Basin case study
 
 ## Purpose
 
