@@ -253,7 +253,9 @@ def province():
 
 # --- files ----------------------------------------------------------------------------------
 
-app.mount("/outputs", StaticFiles(directory=ROOT / "outputs"), name="outputs")
+# On Vercel these are served by the CDN (vercel.json) and left out of the function bundle.
+if (ROOT / "outputs").is_dir():
+    app.mount("/outputs", StaticFiles(directory=ROOT / "outputs"), name="outputs")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 

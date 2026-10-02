@@ -16,6 +16,13 @@ python dashboard/app.py                            # open http://127.0.0.1:8050
 
 Set `HOST=0.0.0.0` to reach it from other devices on your network. Set `PORT` to change the port.
 
+### Deploy to Vercel
+
+Import the repo in Vercel with the defaults (Framework Preset: **Other**, Root Directory: repo root,
+no build command). `vercel.json` routes `/api/*` to the FastAPI app via `api/index.py`, which installs
+only `api/requirements.txt`. `dashboard/static/` and `outputs/` are served from Vercel's CDN.
+Commit `dashboard/data/karnali_dashboard.sqlite` after rebuilding it.
+
 ## What you can do
 
 | View | Use it to |

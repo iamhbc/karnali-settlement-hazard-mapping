@@ -1,0 +1,12 @@
+# Not needed by the deployed dashboard (see vercel.json)
+/analysis/
+/case_studies/
+/configs/
+/data/
+/docs/
+/field_notes/
+/imagery/
+/notebooks/
+/references/
+/src/
+*.ipynb

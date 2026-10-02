@@ -1,0 +1,14 @@
+{
+  "functions": {
+    "api/index.py": {
+      "excludeFiles": "{outputs/**,.git/**}"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/static/(.*)", "destination": "/dashboard/static/$1" },
+    { "source": "/favicon.ico", "destination": "/dashboard/static/favicon.svg" },
+    { "source": "/apple-touch-icon(.*).png", "destination": "/dashboard/static/favicon.svg" },
+    { "source": "/", "destination": "/dashboard/static/index.html" }
+  ]
+}
