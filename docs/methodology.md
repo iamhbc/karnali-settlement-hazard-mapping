@@ -77,3 +77,21 @@ Following the repository's hazard framework:
 - **Vulnerability:** not assessed (construction type, occupancy, warning, evacuation).
 - **Risk to life:** **not estimated.** The outputs identify where a risk assessment would be most
   worthwhile.
+
+### 5. Per-epoch frames and spectral indicators (dashboard, 2026-10-02)
+
+Script: `analysis/temporal/export_epoch_frames.py` (module `src/remote_sensing/epoch_frames.py`).
+
+- Re-reads exactly the scenes in `data/metadata/imagery_catalog.csv`, with no re-selection.
+- Writes one 400 × 400 px JPEG per settlement-epoch, using the same display rules as the time-series
+  figures.
+- Measures these indicators on clear pixels (excluding no-data, cloud, shadow and snow):
+  - NDVI mean
+  - vegetation share (NDVI > 0.3)
+  - surface-water share (MNDWI > 0 from green/SWIR1; MSS uses NDWI from green/NIR)
+  - mean visible reflectance
+- Indicators on 1970s MSS DN are flagged `comparable = False` and are never differenced.
+- Thresholds (0.3, 0) are conventional screening values, not calibrated for Karnali.
+
+The dashboard (`dashboard/`) derives change summaries from these indicators and from GHSL
+interpolated to the image dates. See `dashboard/README.md`.

@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Karnali Settlement Explorer</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <strong>Karnali Settlement Explorer</strong>
+    <span class="muted">79 local-level settlements · satellite record 1972–2026</span>
+  </div>
+  <nav class="views" role="tablist">
+    <button role="tab" data-view="explorer" class="active">Explorer</button>
+    <button role="tab" data-view="province">Province overview</button>
+    <button role="tab" data-view="about">Method &amp; sources</button>
+  </nav>
+</header>
+<div class="banner" role="note">
+  <strong>Exposure screening, not a risk-to-life estimate.</strong>
+  Low-ground zones are terrain thresholds (HAND), not modelled floods; buildings are not people.
+  Images are observed. Indicators and built-up values are derived. Nothing here is field-validated.
+</div>
+
+<main id="view-explorer" class="view explorer">
+  <aside class="sidebar">
+    <input id="search" type="search" placeholder="Search settlement, municipality, district, river…" aria-label="Search">
+    <div class="filters">
+      <select id="f-district" aria-label="District"><option value="">All districts</option></select>
+      <select id="f-type" aria-label="Local level type">
+        <option value="">Urban + rural</option>
+        <option value="urban municipality">Urban municipalities</option>
+        <option value="rural municipality">Rural municipalities</option>
+      </select>
+      <select id="f-sort" aria-label="Sort">
+        <option value="rank">Sort: exposure rank</option>
+        <option value="le5">Sort: buildings HAND ≤ 5 m</option>
+        <option value="share5">Sort: share HAND ≤ 5 m</option>
+        <option value="buildings">Sort: buildings in window</option>
+        <option value="name">Sort: name</option>
+        <option value="district">Sort: district</option>
+        <option value="id">Sort: ID</option>
+      </select>
+    </div>
+    <div id="list-count" class="muted small"></div>
+    <ul id="list" class="list"></ul>
+  </aside>
+
+  <section class="main">
+    <div id="map" class="map" aria-label="Map of settlements"></div>
+    <section id="detail" class="detail">
+      <div id="detail-empty" class="empty">Select a settlement on the map or in the list.</div>
+      <div id="detail-body" hidden>
+        <div class="detail-head">
+          <div>
+            <h2 id="d-title"></h2>
+            <div id="d-sub" class="muted"></div>
+          </div>
+          <div id="d-stats" class="stats"></div>
+        </div>
+        <nav class="tabs" role="tablist">
+          <button data-tab="timeline" class="active">Timeline</button>
+          <button data-tab="compare">Compare</button>
+          <button data-tab="trends">Trends</button>
+          <button data-tab="flood">Low-ground scenarios</button>
+          <button data-tab="profile">Profile</button>
+        </nav>
+
+        <div class="tab" id="tab-timeline">
+          <div class="row controls">
+            <label>Show
+              <select id="t-step">
+                <option value="5">every 5 years</option>
+                <option value="10">every 10 years</option>
+              </select>
+            </label>
+            <span class="muted small">Click an image to see what changed since the previous one shown.</span>
+          </div>
+          <div id="t-strip" class="strip"></div>
+          <div class="viewer">
+            <figure id="t-figure"></figure>
+            <div id="t-summary" class="summary"></div>
+          </div>
+        </div>
+
+        <div class="tab" id="tab-compare" hidden>
+          <div class="row controls">
+            <label>From <select id="c-a"></select></label>
+            <label>To <select id="c-b"></select></label>
+            <span class="presets">
+              <button data-preset="5">5-year step</button>
+              <button data-preset="10">10-year step</button>
+              <button data-preset="all">First → latest</button>
+            </span>
+            <span class="modes" role="radiogroup" aria-label="Comparison view">
+              <button data-mode="side" class="active">Side by side</button>
+              <button data-mode="swipe">Swipe</button>
+              <button data-mode="diff">Difference</button>
+            </span>
+          </div>
+          <div class="compare-grid">
+            <div id="c-view" class="c-view"></div>
+            <div id="c-summary" class="summary"></div>
+          </div>
+        </div>
+
+        <div class="tab" id="tab-trends" hidden>
+          <div class="charts">
+            <figure class="chart"><figcaption>Built-up surface (ha), GHSL 1975–2020</figcaption><div class="cw"><canvas id="ch-built"></canvas></div></figure>
+            <figure class="chart"><figcaption>Vegetation cover (% of clear pixels, NDVI &gt; 0.3)</figcaption><div class="cw"><canvas id="ch-veg"></canvas></div></figure>
+            <figure class="chart"><figcaption>Surface water (% of clear pixels, MNDWI &gt; 0)</figcaption><div class="cw"><canvas id="ch-water"></canvas></div></figure>
+          </div>
+          <p class="muted small">Vegetation and water use calibrated Landsat TM/OLI and Sentinel-2 images only.
+            1970s MSS frames are excluded because they are uncalibrated. Sensor and season differences remain.</p>
+          <details><summary>Table view</summary><div id="trend-table"></div></details>
+        </div>
+
+        <div class="tab" id="tab-flood" hidden>
+          <div class="row controls">
+            <span class="muted small">Toggle zones on the map:</span>
+            <label><input type="checkbox" data-zone="2" checked> HAND ≤ 2 m</label>
+            <label><input type="checkbox" data-zone="5" checked> ≤ 5 m</label>
+            <label><input type="checkbox" data-zone="10" checked> ≤ 10 m</label>
+          </div>
+          <div id="f-table"></div>
+          <img id="f-figure" class="figure-img" alt="Water-level scenario figure">
+        </div>
+
+        <div class="tab" id="tab-profile" hidden>
+          <article id="p-body" class="markdown"></article>
+        </div>
+      </div>
+    </section>
+  </section>
+</main>
+
+<main id="view-province" class="view province" hidden>
+  <div class="cards" id="prov-cards"></div>
+  <div class="charts two">
+    <figure class="chart"><figcaption>Buildings on low ground by district (HAND ≤ 5 m)</figcaption><div class="cw"><canvas id="ch-district"></canvas></div></figure>
+    <figure class="chart"><figcaption>Built-up surface across all 79 windows (ha), GHSL</figcaption><div class="cw"><canvas id="ch-prov-built"></canvas></div></figure>
+  </div>
+  <h3>All settlements</h3>
+  <div id="prov-table" class="table-wrap"></div>
+</main>
+
+<main id="view-about" class="view about" hidden>
+  <article class="markdown" id="about-body"></article>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

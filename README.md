@@ -71,6 +71,8 @@ It is an **exposure screening**, not a flood model or a risk-to-life estimate.
 - Profiles: [`settlements/settlement_profiles/`](settlements/settlement_profiles/)
 - Layers: [`data/processed/karnali_79/`](data/processed/karnali_79/)
 - Method and limits: [`docs/methodology.md`](docs/methodology.md) and [`docs/limitations.md`](docs/limitations.md)
+- Web dashboard: [`dashboard/`](dashboard/README.md). Run `python dashboard/app.py` to search, view and
+  compare the images every 5 or 10 years, with change summaries.
 
 ## Research Questions
 
