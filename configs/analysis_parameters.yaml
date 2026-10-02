@@ -14,3 +14,44 @@ analysis:
     exposure_layers: []
   uncertainty:
     confidence_scale: to_be_defined
+
+# ---------------------------------------------------------------------------
+# Province-wide first-pass screening of 79 local-level primary settlements
+# (analysis/hazard_exposure/run_karnali_79.py). Values below are first-pass
+# screening choices made on 2026-10-02 and documented in docs/methodology.md;
+# they are NOT validated scientific parameters and should be reviewed.
+# ---------------------------------------------------------------------------
+karnali_79_screening:
+  metric_crs: EPSG:32644            # WGS 84 / UTM 44N (covers 78-84 E)
+  overture_release: 2026-09-23.1
+  settlement_selection:
+    building_count_radius_m: 500
+    min_share_of_densest_cluster: 0.5   # below this, use densest building cluster
+  analysis_window_m: 4000           # square chip centred on the settlement
+  hazard_context_buffer_m: 1000     # extra DEM/channel context around the window
+  imagery:
+    dry_season_months: [10, 11, 12, 1, 2, 3, 4]
+    max_candidates_per_epoch: 8
+    max_chip_cloud_fraction: 0.05
+    max_chip_nodata_fraction: 0.02
+    epochs:   # 5-year steps from the first Landsat image (1972) to the latest season
+      - {label: "1972", target_year: 1972, collection: landsat-c2-l1, start: "1972-07-01", end: "1974-12-31"}
+      - {label: "1977", target_year: 1977, collection: landsat-c2-l1, start: "1975-01-01", end: "1979-12-31"}
+      - {label: "1982", target_year: 1982, collection: landsat-c2-l1, start: "1980-01-01", end: "1984-12-31"}
+      - {label: "1987", target_year: 1987, collection: landsat-c2-l2, start: "1985-01-01", end: "1989-12-31", fallback: landsat-c2-l1}
+      - {label: "1992", target_year: 1992, collection: landsat-c2-l2, start: "1990-01-01", end: "1994-12-31"}
+      - {label: "1997", target_year: 1997, collection: landsat-c2-l2, start: "1995-01-01", end: "1999-12-31"}
+      - {label: "2002", target_year: 2002, collection: landsat-c2-l2, start: "2000-01-01", end: "2004-12-31"}
+      - {label: "2007", target_year: 2007, collection: landsat-c2-l2, start: "2005-01-01", end: "2009-12-31"}
+      - {label: "2012", target_year: 2012, collection: landsat-c2-l2, start: "2010-01-01", end: "2014-12-31"}
+      - {label: "2017", target_year: 2017, collection: sentinel-2-l2a, start: "2015-07-01", end: "2019-12-31", fallback: landsat-c2-l2}
+      - {label: "2022", target_year: 2022, collection: sentinel-2-l2a, start: "2020-01-01", end: "2024-12-31", fallback: landsat-c2-l2}
+      - {label: "2026", target_year: 2026, collection: sentinel-2-l2a, start: "2025-06-01", end: "2026-10-01", fallback: landsat-c2-l2}
+  water_level_scenarios:
+    dem: cop-dem-glo-30
+    resolution_m: 25                 # GLO-30 bilinear-resampled so the 4 km window has whole cells
+    method: HAND (height above nearest drainage, D8, pysheds)
+    channel_subtypes: [river, stream]   # Overture base/water subtypes used as channels
+    channel_burn_m: 5                   # channels lowered before flow routing so D8 follows them
+    levels_m: [2, 5, 10]            # water level (HAND) above the channel a cell drains to
+  ghsl_epochs: [1975, 1980, 1985, 1990, 1995, 2000, 2005, 2010, 2015, 2020]

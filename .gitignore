@@ -50,3 +50,6 @@ secrets*
 *.bak
 *.aux
 *.lock
+
+# Approved small derived vector layers (79-settlement screening; documented in docs/data_sources.md)
+!data/processed/karnali_79/*.geojson
