@@ -54,6 +54,24 @@ The JhupraKhola case study is intended to investigate, where supported by availa
 
 No analysis is described as complete unless the repository contains clear supporting evidence for that status.
 
+## Province-wide Screening: 79 Local-level Settlements (first pass)
+
+The first province-wide pass (2026-10-02) covers the primary settlement of each of Karnali's 79 local
+levels (25 urban and 54 rural municipalities). For each settlement it provides:
+
+- a 12-epoch satellite time series at 5-year steps from the first Landsat image (1972) to 2026
+- water-level scenario zones at HAND ≤ 2, 5 and 10 m, using Height Above Nearest Drainage on Copernicus
+  GLO-30, with building counts in each zone
+- GHSL built-up history from 1975 to 2020
+
+It is an **exposure screening**, not a flood model or a risk-to-life estimate.
+
+- Report: [`outputs/reports/karnali_79_exposure_screening_report.md`](outputs/reports/karnali_79_exposure_screening_report.md)
+- Table: [`outputs/tables/karnali_79_exposure_screening.csv`](outputs/tables/karnali_79_exposure_screening.csv)
+- Profiles: [`settlements/settlement_profiles/`](settlements/settlement_profiles/)
+- Layers: [`data/processed/karnali_79/`](data/processed/karnali_79/)
+- Method and limits: [`docs/methodology.md`](docs/methodology.md) and [`docs/limitations.md`](docs/limitations.md)
+
 ## Research Questions
 
 ### RQ1 — Settlement and Water Systems

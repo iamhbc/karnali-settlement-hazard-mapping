@@ -12,3 +12,9 @@ matplotlib
 jupyter
 folium
 contextily
+pyyaml
+pyarrow
+duckdb
+pystac-client
+planetary-computer
+pysheds

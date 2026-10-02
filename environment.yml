@@ -17,3 +17,9 @@ dependencies:
   - jupyter
   - folium
   - contextily
+  - pyyaml
+  - pyarrow
+  - python-duckdb
+  - pystac-client
+  - planetary-computer
+  - pysheds
