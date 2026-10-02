@@ -83,3 +83,4 @@ API docs: `http://127.0.0.1:8050/api/docs`.
 1. Re-run the screening (`analysis/hazard_exposure/run_karnali_79.py` and `compile_karnali_79.py`).
 2. Export the epoch frames: `PYTHONPATH=src python analysis/temporal/export_epoch_frames.py`.
 3. Rebuild the database: `python dashboard/build_db.py`.
+4. Refresh the browsable image index: `python analysis/hazard_exposure/build_imagery_index.py`.
