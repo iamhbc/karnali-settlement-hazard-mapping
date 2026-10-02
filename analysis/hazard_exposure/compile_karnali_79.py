@@ -132,7 +132,7 @@ def overview_map(df):
     ax.set_xlabel("Longitude")
     ax.set_ylabel("Latitude")
     fig.text(0.01, 0.01, "Boundaries: COD-AB Nepal (Survey Dept. of Nepal / OCHA, CC BY-IGO); rivers, places, "
-             "buildings: Overture Maps (OSM ODbL, Google CC BY 4.0, Microsoft ODbL); DEM: Copernicus GLO-30. "
+             "buildings: Overture Maps (OSM ODbL, Google CC BY 4.0, Microsoft ODbL); DEM: Copernicus GLO-30.\n"
              "Shaded = urban municipality. Screening only - not a hydraulic flood model or a risk estimate.",
              fontsize=7)
     fig.tight_layout()
@@ -340,8 +340,7 @@ def write_report(df, cat):
   ({tot_vals[hi] / tot * 100:.1f}%).
 - Image chips catalogued: {len(cat)} of {79 * 12} possible (79 x 12 epochs). Missing epochs mostly
   reflect archive gaps (especially 1980–84) or persistent cloud or snow.
-- Settlements with no mapped river or stream in their 6 x 6 km context: {no_ch}. Their HAND exposure
-  is reported as 0 but is **unknown**.
+- Settlements with no mapped river or stream in their 6 x 6 km context: {no_ch}{". Their HAND exposure is reported as 0 but is **unknown**" if no_ch else " (every settlement has mapped drainage, but unmapped small streams are still missing)"}.
 
 ### By type of local level
 
