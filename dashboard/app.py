@@ -262,6 +262,13 @@ def index():
     return FileResponse(STATIC / "index.html")
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+@app.get("/apple-touch-icon.png", include_in_schema=False)
+@app.get("/apple-touch-icon-precomposed.png", include_in_schema=False)
+def icon():
+    return FileResponse(STATIC / "favicon.svg", media_type="image/svg+xml")
+
+
 if __name__ == "__main__":
     import uvicorn
 
