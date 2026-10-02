@@ -20,17 +20,85 @@ const debounce = (fn, ms = 200) => { let t; return (...a) => { clearTimeout(t); 
 
 /* ---------------- map ---------------- */
 const map = L.map("map", { zoomControl: true, preferCanvas: true }).setView([29.1, 82.2], 7);
+/* Base maps and overlays: every open/free tile service verified on 2026-10-02 (no API keys). */
+const T = (url, attribution, o = {}) => L.tileLayer(url, { attribution, maxZoom: 19, ...o });
+const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services";
 const base = {
-  "Light map": L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-    { maxZoom: 16, attribution: "Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors" }),
-  "OpenStreetMap": L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-    { maxZoom: 19, attribution: "© OpenStreetMap contributors" }),
-  "Satellite (Esri)": L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    { maxZoom: 19, attribution: "Imagery © Esri, Maxar, Earthstar Geographics" }),
+  "Light grey (Esri)": T(`${ESRI}/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}`, "Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors", { maxZoom: 16 }),
+  "OpenStreetMap": T("https://tile.openstreetmap.org/{z}/{x}/{y}.png", "© OpenStreetMap contributors"),
+  "OSM Humanitarian (HOT)": T("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", "© OpenStreetMap contributors, tiles HOT / OSM France"),
+  "CyclOSM (roads & trails)": T("https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png", "© OpenStreetMap contributors, CyclOSM"),
+  "OpenTopoMap (contours)": T("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", "© OpenStreetMap contributors, SRTM | © OpenTopoMap (CC BY-SA)", { maxZoom: 17 }),
+  "Esri World Topographic": T(`${ESRI}/World_Topo_Map/MapServer/tile/{z}/{y}/{x}`, "Tiles © Esri and contributors"),
+  "Esri NatGeo": T(`${ESRI}/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}`, "Tiles © Esri, National Geographic", { maxZoom: 16 }),
+  "EOX Terrain": T("https://tiles.maps.eox.at/wmts/1.0.0/terrain-light_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg", "Terrain © EOX IT Services, © OpenStreetMap contributors", { maxZoom: 15 }),
+  "Satellite: Esri World Imagery (high-res)": T(`${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`, "Imagery © Esri, Maxar, Earthstar Geographics"),
+  "Satellite: Sentinel-2 cloudless 2023 (EOX)": T("https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2023_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg", "Sentinel-2 cloudless 2023 © EOX IT Services (contains modified Copernicus Sentinel data 2023), CC BY-NC-SA 4.0", { maxZoom: 15 }),
 };
-base["Light map"].addTo(map);
-const layers = { levels: L.geoJSON(null), markers: L.layerGroup().addTo(map), zones: {}, window: L.layerGroup().addTo(map) };
-const ctrl = L.control.layers(base, { "Local levels": layers.levels }, { collapsed: true }).addTo(map);
+base["Light grey (Esri)"].addTo(map);
+const overlays = {
+  "Local levels (79)": null,   // filled below
+  "Place labels (Esri)": T(`${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`, "Labels © Esri"),
+  "Hillshade (Esri)": T(`${ESRI}/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}`, "Hillshade © Esri", { opacity: 0.45 }),
+  "Water occurrence 1984-2021 (JRC GSW)": T("https://storage.googleapis.com/global-surface-water/tiles2021/occurrence/{z}/{x}/{y}.png", "JRC Global Surface Water (Pekel et al. 2016), CC BY 4.0", { maxNativeZoom: 13 }),
+};
+const layers = { levels: L.geoJSON(null), markers: L.layerGroup().addTo(map), zones: {}, window: L.layerGroup().addTo(map), scene: null, gibs: {} };
+overlays["Local levels (79)"] = layers.levels;
+const ctrl = L.control.layers(base, overlays, { collapsed: true }).addTo(map);
+
+/* NASA GIBS near-real-time layers (daily or 30-min), with a date picker for the daily ones. */
+const GIBS = {
+  "VIIRS_NOAA20_CorrectedReflectance_TrueColor": ["Satellite today: VIIRS NOAA-20 true colour (daily, 375 m)", "base"],
+  "VIIRS_NOAA21_CorrectedReflectance_TrueColor": ["Satellite today: VIIRS NOAA-21 true colour (daily, 375 m)", "base"],
+  "MODIS_Terra_CorrectedReflectance_TrueColor": ["Satellite today: MODIS Terra true colour (daily, 250 m)", "base"],
+  "HLS_S30_Nadir_BRDF_Adjusted_Reflectance": ["Satellite: HLS Sentinel-2 (30 m, by date)", "base"],
+  "HLS_L30_Nadir_BRDF_Adjusted_Reflectance": ["Satellite: HLS Landsat (30 m, by date)", "base"],
+  "OPERA_L3_Dynamic_Surface_Water_Extent-Sentinel-1": ["Surface water from radar: OPERA DSWx-S1 (30 m, by date)", "overlay"],
+  "OPERA_L3_Dynamic_Surface_Water_Extent-HLS": ["Surface water from optical: OPERA DSWx-HLS (30 m, by date)", "overlay"],
+  "MODIS_Combined_Flood_3-Day": ["Flood: MODIS 3-day flood map (250 m)", "overlay"],
+  "IMERG_Precipitation_Rate_30min": ["Rain now: GPM IMERG rate (latest 30 min)", "overlay"],
+  "OPERA_L3_DIST-ALERT-HLS_Color_Index": ["Land disturbance alerts: OPERA DIST-ALERT (30 m)", "overlay"],
+};
+let gibsMeta = {};
+const gibsUrl = (id, t) => { const m = gibsMeta[id]; const ext = m.format.endsWith("png") ? "png" : "jpg";
+  return `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${id}/default/${t}/${m.matrix_set}/{z}/{y}/{x}.${ext}`; };
+const dateCtl = L.control({ position: "topright" });
+dateCtl.onAdd = () => {
+  const d = L.DomUtil.create("div", "legend datectl");
+  d.innerHTML = `<label class="small">NASA daily layers date <input type="date" id="gibs-date"></label>`;
+  L.DomEvent.disableClickPropagation(d);
+  return d;
+};
+async function initGibs() {
+  try { gibsMeta = await api("/api/gibs/latest"); } catch { return; }
+  dateCtl.addTo(map);
+  const latestDay = Object.entries(gibsMeta).filter(([k]) => k.startsWith("VIIRS")).map(([, v]) => v.default).sort().at(-1);
+  const inp = $("#gibs-date"); inp.value = latestDay; inp.max = latestDay;
+  for (const [id, [label, kind]] of Object.entries(GIBS)) {
+    const m = gibsMeta[id]; if (!m) continue;
+    const t = id.includes("30min") ? m.default : (id.startsWith("VIIRS") || id.startsWith("MODIS") ? latestDay : m.default);
+    const lyr = L.tileLayer(gibsUrl(id, t), { maxNativeZoom: m.max_zoom, maxZoom: 19, opacity: kind === "overlay" ? 0.85 : 1,
+      attribution: `NASA GIBS / EOSDIS (${id.split("_")[0]})` });
+    lyr._gibsId = id;
+    layers.gibs[id] = lyr;
+    kind === "base" ? ctrl.addBaseLayer(lyr, label) : ctrl.addOverlay(lyr, label);
+  }
+  inp.addEventListener("change", () => {
+    for (const [id, lyr] of Object.entries(layers.gibs)) if (!id.includes("30min")) lyr.setUrl(gibsUrl(id, inp.value));
+  });
+}
+
+/* Full-resolution view of one exact scene (Planetary Computer tiler). */
+async function showSceneOnMap(collection, item, label) {
+  try {
+    const tj = await api(`/api/tilejson?collection=${encodeURIComponent(collection)}&item=${encodeURIComponent(item)}`);
+    if (layers.scene) { map.removeLayer(layers.scene); ctrl.removeLayer(layers.scene); }
+    layers.scene = L.tileLayer(tj.tiles[0], { maxZoom: 19, maxNativeZoom: tj.maxzoom || 18, bounds: tj.bounds ? [[tj.bounds[1], tj.bounds[0]], [tj.bounds[3], tj.bounds[2]]] : undefined,
+      attribution: "Scene via Microsoft Planetary Computer" }).addTo(map);
+    ctrl.addOverlay(layers.scene, `Scene: ${label}`);
+    layers.markers.bringToFront?.();
+  } catch (e) { alert(`Could not load scene tiles: ${e.message}`); }
+}
 
 const legend = L.control({ position: "bottomleft" });
 legend.onAdd = () => {
@@ -130,7 +198,7 @@ $$(".tabs button").forEach((b) => b.addEventListener("click", () => {
 }));
 function renderTab() {
   if (!S.detail) return;
-  ({ timeline: renderTimeline, compare: renderCompare, trends: renderTrends, flood: renderFlood, profile: renderProfile })[S.activeTab]();
+  ({ timeline: renderTimeline, live: renderLive, compare: renderCompare, trends: renderTrends, flood: renderFlood, profile: renderProfile })[S.activeTab]();
 }
 
 const imgLabel = (i) => `${i.epoch} · ${i.acquired} · ${i.platform.replace("landsat-", "Landsat ")} ${i.resolution_m} m`;
@@ -179,7 +247,9 @@ async function showTimelineEpoch(epoch) {
   $$("#t-strip .thumb").forEach((t) => t.classList.toggle("active", +t.dataset.epoch === epoch));
   $("#t-figure").innerHTML = `<img src="${frameUrl(img)}" alt="${esc(imgLabel(img))}">
     <figcaption>${esc(imgLabel(img))}${img.comparable ? "" : " · false colour (vegetation red)"} · clear ${pctf(img.valid_fraction, 0)}<br>
-    Scene <code>${esc(img.scene_id)}</code> · ${esc(img.licence)} · 4×4 km, centre marked on map</figcaption>`;
+    Scene <code>${esc(img.scene_id)}</code> · ${esc(img.licence)} · 4×4 km, centre marked on map<br>
+    <button id="t-fullres">Full resolution on map</button></figcaption>`;
+  $("#t-fullres").addEventListener("click", () => showSceneOnMap(img.collection, img.scene_id, `${img.epoch} ${img.platform}`));
   if (idx <= 0) {
     $("#t-summary").innerHTML = `<h4>${img.epoch}: first image in this series</h4>
       <p class="muted">Select a later image to see the change since the previous one shown, or use the Compare tab for any pair.</p>`;
@@ -320,6 +390,105 @@ async function renderProfile() {
     `<p><a href="${REPO}${S.detail.profile_path}" target="_blank" rel="noopener">Open this profile on GitHub</a></p>`;
 }
 
+
+/* ---------------- live monitoring ---------------- */
+const catHTML = (mm, cat) => mm === null || mm === undefined ? "–"
+  : `${fmt(mm, 1)} mm <span class="cat ${esc(cat || "")}">${/heavy/.test(cat || "") ? "⚠ " : ""}${esc(cat || "")}</span>`;
+const ago = (iso) => { if (!iso) return "never"; const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  return m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
+
+async function renderLive() {
+  const d = await api(`/api/live/settlements/${S.sel}`);
+  const x = d.summary;
+  $("#l-cards").innerHTML = [
+    [catHTML(x.rain_past24_mm, x.rain_past24_category), "rain, last 24 h (model)"],
+    [catHTML(x.rain_fc_max24_mm, x.rain_fc_max24_category), "max 24 h rain, next 3 days"],
+    [x.discharge_fc_ratio === null ? "–" : `${fmt(x.discharge_fc_ratio, 2)}×`, `river forecast max vs 30-day median (${fmt(x.discharge_fc_max, 1)} m³/s)`],
+    [x.s1_zone_water_ha === null ? "–" : `${fmt(x.s1_zone_water_ha, 2)} ha`, `radar water in low ground, ${x.s1_latest || "no pass"}${x.s1_water_ratio ? ` (${x.s1_water_ratio}× usual)` : ""}`],
+    [x.s2_latest_clear || "–", "latest clear optical image"],
+    [fmt(x.incidents_30d), "BIPAD incidents in this local level, 30 days"],
+  ].map(([v, l]) => `<div class="stat"><b>${v}</b><em>${l}</em></div>`).join("");
+
+  chartDefaults();
+  const rh = d.rain_hourly;
+  S.charts["ch-rain"]?.destroy();
+  S.charts["ch-rain"] = new Chart($("#ch-rain"), {
+    type: "bar",
+    data: { labels: rh.map((r) => r.time.slice(5, 13).replace("T", " ")), datasets: [
+      { label: "Past (model analysis)", data: rh.map((r) => r.kind === "past" ? r.precip_mm : null), backgroundColor: css("--series-1"), borderRadius: 2 },
+      { label: "Forecast", data: rh.map((r) => r.kind === "forecast" ? r.precip_mm : null), backgroundColor: css("--series-2"), borderRadius: 2 }] },
+    options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false }, plugins: { legend: { position: "bottom" } },
+      scales: { x: { stacked: true, ticks: { maxTicksLimit: 8 }, grid: { display: false } }, y: { stacked: true, beginAtZero: true, title: { display: true, text: "mm per hour" } } } },
+  });
+  const q = d.discharge_daily;
+  lineChart("ch-q", q.map((r) => r.date.slice(5)), [
+    { label: "Past (GloFAS reanalysis/forecast)", data: q.map((r) => r.kind === "past" ? r.discharge : null) },
+    { label: "Forecast (ensemble median)", data: q.map((r) => r.kind === "forecast" ? r.discharge_median : null), borderDash: [5, 4] }], "m³/s");
+  const cell = q[0];
+  $("#l-qnote").textContent = cell ? `GloFAS cell centre ${cell.cell_lat}, ${cell.cell_lon} (~5 km grid): it may represent a larger river than the nearest khola. Model values, not gauge readings.` : "No discharge data yet.";
+
+  $("#l-scenes").innerHTML = d.scenes.length ? d.scenes.map((sc) => `
+    <div class="scene">
+      ${sc.preview_url || sc.frame_path ? `<img loading="lazy" src="${sc.preview_url || `/live_frames/${sc.frame_path}`}" alt="">` : `<div class="muted">not processed</div>`}
+      <div><b>${sc.acquired}</b> · ${sc.collection === "sentinel-1-rtc" ? "Sentinel-1 radar" : "Sentinel-2 optical"}</div>
+      <div class="muted">${sc.collection === "sentinel-1-rtc" ? `water in low ground ${fmt(sc.zone_water_ha, 2)} ha` : `clear ${pctf(sc.clear_fraction, 0)} · water ${sc.zone_water_ha === null ? "n/a (cloud)" : fmt(sc.zone_water_ha, 2) + " ha"}`}</div>
+      <button data-coll="${sc.collection}" data-item="${esc(sc.scene_id)}" data-label="${sc.acquired}">Full resolution on map</button>
+    </div>`).join("") : `<p class="muted">No scenes yet: the satellite job has not run for this settlement.</p>`;
+  $$("#l-scenes button").forEach((b) => b.addEventListener("click", () => showSceneOnMap(b.dataset.coll, b.dataset.item, `${b.dataset.label} ${b.dataset.coll}`)));
+  $("#l-incidents").innerHTML = incidentTable(d.incidents);
+}
+
+function incidentTable(list) {
+  if (!list.length) return `<p class="muted">No water-related incidents recorded in BIPAD for this area in the period.</p>`;
+  return `<div class="table-wrap"><table><thead><tr><th class="txt">Date</th><th class="txt">Hazard</th><th class="txt">Title</th><th>Deaths</th><th>Missing</th><th>Injured</th><th>Houses destroyed</th><th>Families affected</th></tr></thead><tbody>
+    ${list.map((i) => `<tr><td class="txt">${i.incident_on}</td><td class="txt">${esc(i.hazard)}</td>
+      <td class="txt"><a href="https://bipadportal.gov.np/incidents/" target="_blank" rel="noopener">${esc(i.title)}</a></td>
+      <td>${fmt(i.deaths)}</td><td>${fmt(i.missing)}</td><td>${fmt(i.injured)}</td><td>${fmt(i.houses_destroyed)}</td><td>${fmt(i.families_affected)}</td></tr>`).join("")}
+  </tbody></table></div>`;
+}
+
+let liveTimer = null;
+async function loadLiveView() {
+  const [st, ov, inc] = await Promise.all([api("/api/live/status"), api("/api/live/overview"), api("/api/live/incidents?days=30")]);
+  if (st.mode === "ondemand") {
+    $("#live-status").innerHTML = `Live data fetched on demand from the source APIs (cached up to 30 min for rain, 3 h for rivers and satellite passes) · generated ${ago(st.generated)}`;
+  } else {
+    $("#live-status").innerHTML = "Last updated: " + Object.entries(st.schedule_minutes).map(([j, m]) =>
+      `${j} ${ago(st.last_ok[j])} (every ${m} min)`).join(" · ") + (st.auto_update ? " · auto-update ON" : " · auto-update off (run live_update.py)") +
+      (st.recent_errors.length ? ` · <span title="${esc(st.recent_errors[0].message)}">⚠ last error in ${esc(st.recent_errors[0].job)}</span>` : "");
+  }
+  const heavy = ov.filter((r) => /heavy/.test(r.rain_fc_max24_category || "")).length;
+  const rainNow = ov.filter((r) => (r.rain_past24_mm || 0) >= 15.6).length;
+  $("#live-cards").innerHTML = [
+    [heavy, "settlements with ≥ heavy 24 h rain forecast (next 3 days)"], [rainNow, "with ≥ moderate rain in the last 24 h"],
+    [ov.filter((r) => (r.discharge_fc_ratio || 0) >= 2).length, "river forecast ≥ 2× its 30-day median"],
+    [ov.filter((r) => (r.s1_water_ratio || 0) >= 1.5).length, "radar low-ground water ≥ 1.5× usual"],
+    [inc.length, "water-related incidents reported, 30 days"],
+  ].map(([v, l]) => `<div class="card"><b>${v}</b><span>${l}</span></div>`).join("");
+  const cols = [["settlement_id", "ID"], ["name", "Settlement"], ["local_level", "Local level"], ["district", "District"],
+    ["rain_past24_mm", "Rain 24 h"], ["rain_fc_max24_mm", "Max 24 h forecast"], ["discharge_fc_ratio", "River ratio"],
+    ["s1_latest", "Latest radar"], ["s1_water_ratio", "Radar water ratio"], ["s2_latest_clear", "Latest clear optical"], ["incidents_30d", "Incidents 30 d"], ["exposure_rank", "Exposure rank"]];
+  let key = "rain_fc_max24_mm", asc = false;
+  const cell = (r, k) => k === "rain_past24_mm" ? catHTML(r[k], r.rain_past24_category) : k === "rain_fc_max24_mm" ? catHTML(r[k], r.rain_fc_max24_category)
+    : k.endsWith("ratio") ? (r[k] === null ? "–" : `${fmt(r[k], 2)}×`) : typeof r[k] === "number" ? fmt(r[k]) : esc(r[k] ?? "–");
+  const draw = () => {
+    const sorted = [...ov].sort((a, b) => ((a[key] ?? -1e9) > (b[key] ?? -1e9) ? 1 : -1) * (asc ? 1 : -1));
+    $("#live-table").innerHTML = `<table><thead><tr>${cols.map(([k, l]) => `<th data-k="${k}" class="${["settlement_id", "name", "local_level", "district"].includes(k) ? "txt" : ""}">${l}${k === key ? (asc ? " ▲" : " ▼") : ""}</th>`).join("")}</tr></thead>
+      <tbody>${sorted.map((r) => `<tr data-id="${r.settlement_id}">${cols.map(([k]) => `<td class="${["settlement_id", "name", "local_level", "district"].includes(k) ? "txt" : ""}">${cell(r, k)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+    $$("#live-table th").forEach((th) => th.addEventListener("click", () => { asc = key === th.dataset.k ? !asc : false; key = th.dataset.k; draw(); }));
+    $$("#live-table tbody tr").forEach((tr) => tr.addEventListener("click", () => { S.activeTab = "live"; activateTab("live"); select(tr.dataset.id); }));
+  };
+  draw();
+  $("#live-incidents").innerHTML = incidentTable(inc).replace(/^<div class="table-wrap">|<\/div>$/g, "");
+  clearTimeout(liveTimer);
+  liveTimer = setTimeout(() => { if (!$("#view-live").hidden) loadLiveView(); }, 5 * 60 * 1000);
+}
+
+function activateTab(name) {
+  $$(".tabs button").forEach((x) => x.classList.toggle("active", x.dataset.tab === name));
+  $$(".tab").forEach((t) => (t.hidden = t.id !== `tab-${name}`));
+}
+
 /* ---------------- views ---------------- */
 $$(".views button").forEach((b) => b.addEventListener("click", () => showView(b.dataset.view)));
 function showView(v) {
@@ -327,6 +496,7 @@ function showView(v) {
   $$(".view").forEach((x) => (x.hidden = x.id !== `view-${v}`));
   if (v === "explorer") setTimeout(() => map.invalidateSize(), 50);
   if (v === "province" && !S.provinceLoaded) loadProvince();
+  if (v === "live") loadLiveView();
   if (v === "about") renderAbout();
 }
 
@@ -405,6 +575,7 @@ Copernicus DEM GLO-30 · Landsat Collection 2 (USGS, public domain) · Sentinel-
     fillColor: css("--series-2"), fillOpacity: f.properties.local_level_type.startsWith("urban") ? 0.08 : 0 }));
   layers.levels.eachLayer((l) => l.bindTooltip(`${esc(l.feature.properties.name)} (${esc(l.feature.properties.local_level_type)})`, { sticky: true }));
   layers.levels.addTo(map);
+  initGibs();
   map.fitBounds(layers.levels.getBounds(), { padding: [10, 10] });
   await loadList();
   const fromHash = () => {

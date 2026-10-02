@@ -1,0 +1,52 @@
+# Near-real-time monitoring layer for the 79 screened settlements (dashboard "Live").
+# Values are operational display settings chosen on 2026-10-02, not validated hazard
+# thresholds. Nothing here is an official warning; see docs/limitations.md.
+monitoring:
+  database: dashboard/data/live.sqlite          # dynamic, git-ignored
+  frames_dir: dashboard/data/live_frames        # dynamic, git-ignored
+  timezone: Asia/Kathmandu
+
+  schedule_minutes:          # used by `python dashboard/live_update.py --loop` and LIVE_UPDATES=1
+    weather: 60
+    discharge: 180
+    incidents: 60
+    satellite: 360
+
+  weather:                   # Open-Meteo forecast API (modelled; CC BY 4.0)
+    url: https://api.open-meteo.com/v1/forecast
+    past_days: 3
+    forecast_days: 3
+  # Display categories for 24 h rainfall, following the India Meteorological Department
+  # terminology (mm/24 h). Used only to label values; not a Nepal-specific warning scale.
+  rain_24h_categories_mm:
+    - {min: 0,     label: "none / trace"}
+    - {min: 2.5,   label: "light"}
+    - {min: 15.6,  label: "moderate"}
+    - {min: 64.5,  label: "heavy"}
+    - {min: 115.6, label: "very heavy"}
+    - {min: 204.5, label: "extremely heavy"}
+
+  discharge:                 # GloFAS v4 via Open-Meteo flood API (~5 km cells; CC BY 4.0)
+    url: https://flood-api.open-meteo.com/v1/flood
+    past_days: 30
+    forecast_days: 7
+
+  incidents:                 # BIPAD portal, Government of Nepal
+    url: https://bipadportal.gov.np/api/v1/incident/
+    province_id: 6           # Karnali
+    lookback_days: 365
+    hazard_ids: [11, 14, 17, 19, 26, 28, 29]   # Flood, Heavy Rainfall, Landslide, Rainfall, GLOF, Inundation, Soil Erosion
+
+  satellite:
+    lookback_days: 45        # first run backfills this far; later runs fetch only new scenes
+    keep_latest_per_sensor: 12
+    sentinel2:
+      collection: sentinel-2-l2a
+      max_scene_cloud: 80    # skip scenes almost fully cloudy at scene level
+    sentinel1:
+      collection: sentinel-1-rtc
+      water_vv_db: -18.0     # VV backscatter below this = open water (common screening value)
+    analysis_zone_hand_m: 10   # water is measured inside the HAND <= 10 m low-ground zone
+
+  dhm_gauges:
+    enabled: false           # DHM real-time API requires an API key (hydrology.gov.np)
