@@ -23,6 +23,20 @@ no build command). `vercel.json` routes `/api/*` to the FastAPI app via `api/ind
 only `api/requirements.txt`. `dashboard/static/` and `outputs/` are served from Vercel's CDN.
 Commit `dashboard/data/karnali_dashboard.sqlite` after rebuilding it.
 
+On Vercel the **Live** layer runs in *on-demand* mode (`dashboard/live_ondemand.py`, standard library
+only), because serverless functions cannot run a background updater or write files:
+
+- Rain, river discharge and BIPAD incidents are fetched when requested, cached in the function, and
+  cached at Vercel's CDN (`s-maxage=900`).
+- Satellite passes come from one STAC search over Karnali. Previews are full-resolution crops
+  rendered by the Planetary Computer data API.
+- Water in the HAND ≤ 10 m zone is computed by Planetary Computer's `/statistics` endpoint (VV
+  histogram for radar, cloud-masked MNDWI for Sentinel-2). Results match the local updater within a
+  few percent.
+
+Locally, the mode is `store` whenever `dashboard/data/live.sqlite` exists. Set `LIVE_MODE=ondemand`
+or `LIVE_MODE=store` to force either mode.
+
 ## What you can do
 
 | View | Use it to |

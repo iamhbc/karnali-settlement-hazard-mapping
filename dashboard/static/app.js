@@ -429,9 +429,9 @@ async function renderLive() {
 
   $("#l-scenes").innerHTML = d.scenes.length ? d.scenes.map((sc) => `
     <div class="scene">
-      ${sc.frame_path ? `<img loading="lazy" src="/live_frames/${sc.frame_path}" alt="">` : `<div class="muted">not processed</div>`}
+      ${sc.preview_url || sc.frame_path ? `<img loading="lazy" src="${sc.preview_url || `/live_frames/${sc.frame_path}`}" alt="">` : `<div class="muted">not processed</div>`}
       <div><b>${sc.acquired}</b> · ${sc.collection === "sentinel-1-rtc" ? "Sentinel-1 radar" : "Sentinel-2 optical"}</div>
-      <div class="muted">${sc.collection === "sentinel-1-rtc" ? `water in low ground ${fmt(sc.zone_water_ha, 2)} ha` : `clear ${pctf(sc.clear_fraction, 0)} · water ${fmt(sc.zone_water_ha, 2)} ha`}</div>
+      <div class="muted">${sc.collection === "sentinel-1-rtc" ? `water in low ground ${fmt(sc.zone_water_ha, 2)} ha` : `clear ${pctf(sc.clear_fraction, 0)} · water ${sc.zone_water_ha === null ? "n/a (cloud)" : fmt(sc.zone_water_ha, 2) + " ha"}`}</div>
       <button data-coll="${sc.collection}" data-item="${esc(sc.scene_id)}" data-label="${sc.acquired}">Full resolution on map</button>
     </div>`).join("") : `<p class="muted">No scenes yet: the satellite job has not run for this settlement.</p>`;
   $$("#l-scenes button").forEach((b) => b.addEventListener("click", () => showSceneOnMap(b.dataset.coll, b.dataset.item, `${b.dataset.label} ${b.dataset.coll}`)));
@@ -450,8 +450,8 @@ function incidentTable(list) {
 let liveTimer = null;
 async function loadLiveView() {
   const [st, ov, inc] = await Promise.all([api("/api/live/status"), api("/api/live/overview"), api("/api/live/incidents?days=30")]);
-  if (!st.available) {
-    $("#live-status").innerHTML = "No live data yet. Run <code>python dashboard/live_update.py</code> or start the app with <code>LIVE_UPDATES=1</code>.";
+  if (st.mode === "ondemand") {
+    $("#live-status").innerHTML = `Live data fetched on demand from the source APIs (cached up to 30 min for rain, 3 h for rivers and satellite passes) · generated ${ago(st.generated)}`;
   } else {
     $("#live-status").innerHTML = "Last updated: " + Object.entries(st.schedule_minutes).map(([j, m]) =>
       `${j} ${ago(st.last_ok[j])} (every ${m} min)`).join(" · ") + (st.auto_update ? " · auto-update ON" : " · auto-update off (run live_update.py)") +

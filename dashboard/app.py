@@ -23,7 +23,7 @@ from urllib.request import Request, urlopen
 
 import yaml
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -34,7 +34,6 @@ GHSL_FIRST, GHSL_LAST = 1975, 2020
 MON = yaml.safe_load(open(ROOT / "configs/monitoring.yaml"))["monitoring"]
 LIVE_DB = ROOT / MON["database"]
 LIVE_FRAMES = ROOT / MON["frames_dir"]
-LIVE_FRAMES.mkdir(parents=True, exist_ok=True)
 
 SORTS = {"rank": "exposure_rank", "name": "name", "district": "district, name",
          "buildings": "buildings_in_window DESC", "le5": "buildings_le_5m DESC",
@@ -278,6 +277,22 @@ def province():
 
 
 # --- live monitoring ---------------------------------------------------------------------------
+# Two providers behind one API:
+#   store    : dashboard/data/live.sqlite filled by live_update.py (local / always-on host)
+#   ondemand : live_ondemand.py fetches and caches per request (serverless, e.g. Vercel)
+
+import sys  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import live_ondemand as od  # noqa: E402
+
+CDN_CACHE = {"Cache-Control": "public, s-maxage=900, stale-while-revalidate=3600"}
+
+
+def live_mode() -> str:
+    forced = os.environ.get("LIVE_MODE")          # "store" | "ondemand"; default: store if the DB exists
+    return forced if forced in ("store", "ondemand") else ("store" if LIVE_DB.exists() else "ondemand")
+
 
 def live_rows(sql: str, args=()) -> list[dict]:
     if not LIVE_DB.exists():
@@ -307,81 +322,146 @@ def _rolling_max(vals: list[float], n: int = 24) -> float | None:
     return max(sum(v[i:i + n]) for i in range(max(1, len(v) - n + 1)))
 
 
-def live_settlement_summary(sid: str) -> dict:
-    w = live_rows("SELECT time, precip_mm, kind FROM weather_hourly WHERE settlement_id=? ORDER BY time", (sid,))
-    past = [r["precip_mm"] for r in w if r["kind"] == "past"]
-    fc = [r["precip_mm"] for r in w if r["kind"] == "forecast"]
+def _base_settlements() -> list[dict]:
+    return rows("SELECT settlement_id, name, local_level, district, local_level_type, lat, lon, pcode, "
+                "buildings_le_5m, exposure_rank FROM settlements ORDER BY settlement_id")
+
+
+def _levels() -> list[dict]:
+    return [{"pcode": r["pcode"], "name": r["name"], "geometry": json.loads(r["geojson"])}
+            for r in rows("SELECT pcode, name, geojson FROM local_levels")]
+
+
+def _live_data(sid: str | None = None) -> dict:
+    """Raw live series for all settlements (or one), from whichever provider is active."""
+    base = _base_settlements()
+    if sid:
+        base = [b for b in base if b["settlement_id"] == sid]
+    ids = [b["settlement_id"] for b in base]
+    if live_mode() == "store":
+        ph = ",".join("?" * len(ids))
+        group = lambda rs: {i: [r for r in rs if r["settlement_id"] == i] for i in ids}  # noqa: E731
+        return dict(
+            base=base,
+            rain=group(live_rows(f"SELECT * FROM weather_hourly WHERE settlement_id IN ({ph}) ORDER BY time", ids)),
+            q=group(live_rows(f"SELECT * FROM discharge_daily WHERE settlement_id IN ({ph}) ORDER BY date", ids)),
+            scenes=group(live_rows(f"SELECT * FROM scenes WHERE settlement_id IN ({ph}) ORDER BY acquired", ids)),
+            incidents=live_rows("SELECT * FROM incidents ORDER BY incident_on DESC"))
+    allb = _base_settlements()
+    with od.ThreadPoolExecutor(4) as ex:
+        f_r = ex.submit(od.weather, allb, MON["weather"], MON["timezone"])
+        f_q = ex.submit(od.discharge, allb, MON["discharge"])
+        f_i = ex.submit(od.incidents, allb, _levels(), MON["incidents"])
+        f_s = ex.submit(od.recent_items, MON["satellite"])
+        rain, q, inc, items = f_r.result(), f_q.result(), f_i.result(), f_s.result()
+    scenes = {}
+    for b in base:
+        scenes[b["settlement_id"]] = [
+            dict(scene_id=i["id"], settlement_id=b["settlement_id"], collection=i["collection"],
+                 acquired=i["datetime"][:10], orbit=i["orbit"], clear_fraction=None, zone_water_ha=None,
+                 _item=i) for i in reversed(od.scenes_for(b, items))]
+    return dict(base=base, rain={i: rain.get(i, []) for i in ids}, q={i: q.get(i, []) for i in ids},
+                scenes=scenes, incidents=inc)
+
+
+def _summary(b: dict, rain: list, q: list, scenes: list, incidents: list) -> dict:
+    past = [r["precip_mm"] for r in rain if r["kind"] == "past"]
+    fc = [r["precip_mm"] for r in rain if r["kind"] == "forecast"]
     rain24 = round(sum(x or 0 for x in past[-24:]), 1) if past else None
     fc24 = round(_rolling_max(fc), 1) if fc else None
-    q = live_rows("SELECT date, discharge, kind FROM discharge_daily WHERE settlement_id=? ORDER BY date", (sid,))
     qp = [r["discharge"] for r in q if r["kind"] == "past" and r["discharge"] is not None]
     qf = [r["discharge"] for r in q if r["kind"] == "forecast" and r["discharge"] is not None]
     q_med = statistics.median(qp) if qp else None
     q_fmax = max(qf) if qf else None
-    sc = live_rows("SELECT collection, acquired, clear_fraction, zone_water_ha FROM scenes WHERE settlement_id=? "
-                   "ORDER BY acquired", (sid,))
-    s1 = [r for r in sc if r["collection"] == "sentinel-1-rtc" and r["zone_water_ha"] is not None]
-    s2 = [r for r in sc if r["collection"] == "sentinel-2-l2a" and (r["clear_fraction"] or 0) >= 0.5]
+    s1_all = [r for r in scenes if r["collection"] == "sentinel-1-rtc"]
+    s1 = [r for r in s1_all if r.get("zone_water_ha") is not None]
+    s2 = [r for r in scenes if r["collection"] == "sentinel-2-l2a" and (r.get("clear_fraction") or 0) >= 0.5]
     s1_ratio = None
     if len(s1) >= 3:
-        base = statistics.median(r["zone_water_ha"] for r in s1[:-1])
-        s1_ratio = round(s1[-1]["zone_water_ha"] / base, 2) if base else None
+        base_w = statistics.median(r["zone_water_ha"] for r in s1[:-1])
+        s1_ratio = round(s1[-1]["zone_water_ha"] / base_w, 2) if base_w else None
     since = (dt.date.today() - dt.timedelta(days=30)).isoformat()
-    pcode = rows("SELECT pcode FROM settlements WHERE settlement_id=?", (sid,))[0]["pcode"]
-    inc = live_rows("SELECT COUNT(*) n, MAX(incident_on) last FROM incidents WHERE pcode=? AND incident_on>=?",
-                    (pcode, since))[0] if LIVE_DB.exists() else {"n": 0, "last": None}
+    inc = [i for i in incidents if i["pcode"] == b["pcode"] and i["incident_on"] >= since]
     return {
-        "settlement_id": sid,
+        "settlement_id": b["settlement_id"],
         "rain_past24_mm": rain24, "rain_past24_category": rain_category(rain24),
         "rain_fc_max24_mm": fc24, "rain_fc_max24_category": rain_category(fc24),
         "discharge_past30_median": None if q_med is None else round(q_med, 2),
         "discharge_fc_max": None if q_fmax is None else round(q_fmax, 2),
         "discharge_fc_ratio": round(q_fmax / q_med, 2) if q_med and q_fmax is not None else None,
-        "s1_latest": s1[-1]["acquired"] if s1 else None,
+        "s1_latest": (s1[-1] if s1 else s1_all[-1])["acquired"] if s1_all else None,
         "s1_zone_water_ha": round(s1[-1]["zone_water_ha"], 2) if s1 else None,
         "s1_water_ratio": s1_ratio,
         "s2_latest_clear": s2[-1]["acquired"] if s2 else None,
-        "incidents_30d": inc["n"], "incident_last": inc["last"],
+        "incidents_30d": len(inc), "incident_last": inc[0]["incident_on"] if inc else None,
     }
 
 
 @app.get("/api/live/status")
-def live_status():
-    jobs = live_rows("""SELECT job, MAX(finished) finished FROM runs WHERE status='ok' GROUP BY job""")
-    errors = live_rows("""SELECT job, finished, message FROM runs WHERE status='error'
-                          ORDER BY finished DESC LIMIT 5""")
-    return {"available": LIVE_DB.exists(), "last_ok": {j["job"]: j["finished"] for j in jobs},
+def live_status(response: Response):
+    mode = live_mode()
+    if mode == "ondemand":
+        response.headers.update(CDN_CACHE)
+    jobs = live_rows("SELECT job, MAX(finished) finished FROM runs WHERE status='ok' GROUP BY job")
+    errors = live_rows("SELECT job, finished, message FROM runs WHERE status='error' ORDER BY finished DESC LIMIT 5")
+    return {"available": True, "mode": mode, "last_ok": {j["job"]: j["finished"] for j in jobs},
             "recent_errors": errors, "schedule_minutes": MON["schedule_minutes"],
-            "auto_update": os.environ.get("LIVE_UPDATES") == "1",
+            "auto_update": os.environ.get("LIVE_UPDATES") == "1", "generated": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
             "rain_categories": MON["rain_24h_categories_mm"]}
 
 
 @app.get("/api/live/overview")
-def live_overview():
-    base = rows("SELECT settlement_id, name, local_level, district, local_level_type, lat, lon, "
-                "buildings_le_5m, exposure_rank FROM settlements ORDER BY settlement_id")
-    return [{**b, **live_settlement_summary(b["settlement_id"])} for b in base]
+def live_overview(response: Response):
+    if live_mode() == "ondemand":
+        response.headers.update(CDN_CACHE)
+    d = _live_data()
+    out = []
+    for b in d["base"]:
+        i = b["settlement_id"]
+        out.append({**b, **_summary(b, d["rain"][i], d["q"][i], d["scenes"][i], d["incidents"])})
+    return out
 
 
 @app.get("/api/live/settlements/{sid}")
-def live_settlement(sid: str):
+def live_settlement(sid: str, response: Response):
     s = settlement(sid)
+    d = _live_data(sid)
+    scenes = d["scenes"][sid]
+    if live_mode() == "ondemand":
+        response.headers.update(CDN_CACHE)
+        zone = json.loads(rows("SELECT geojson FROM scenarios WHERE settlement_id=? AND level_m=?",
+                               (sid, MON["satellite"]["analysis_zone_hand_m"]))[0]["geojson"])
+        polys = [f["geometry"] for f in zone["features"]]
+        coords = [c for g in polys for c in ([g["coordinates"]] if g["type"] == "Polygon" else g["coordinates"])]
+        feature = {"type": "Feature", "properties": {}, "geometry": {"type": "MultiPolygon", "coordinates": coords}}
+        area = next(x["zone_area_ha"] for x in s["scenarios"] if x["level_m"] == MON["satellite"]["analysis_zone_hand_m"])
+        bbox = od.window_bbox(s["lat"], s["lon"])
+        latest = scenes[-MON["satellite"]["keep_latest_per_sensor"]:]
+        with od.ThreadPoolExecutor(8) as ex:
+            mets = list(ex.map(lambda sc: od.scene_metrics(sc["_item"], feature, area, MON["satellite"]["sentinel1"]["water_vv_db"])
+                               if coords else {}, latest))
+        for sc, m in zip(latest, mets):
+            sc.update(m, preview_url=od.preview_url(sc["_item"], bbox), zone_area_ha=area)
+        scenes = latest
+    for sc in scenes:
+        sc.pop("_item", None)
     return {
-        "summary": live_settlement_summary(sid),
-        "rain_hourly": live_rows("SELECT time, precip_mm, kind FROM weather_hourly WHERE settlement_id=? "
-                                 "ORDER BY time", (sid,)),
-        "discharge_daily": live_rows("SELECT date, discharge, discharge_median, discharge_max, kind, cell_lat, "
-                                     "cell_lon FROM discharge_daily WHERE settlement_id=? ORDER BY date", (sid,)),
-        "scenes": live_rows("SELECT * FROM scenes WHERE settlement_id=? ORDER BY acquired DESC", (sid,)),
-        "incidents": live_rows("SELECT * FROM incidents WHERE pcode=? OR (nearest_settlement_id=? AND distance_km<=10) "
-                               "ORDER BY incident_on DESC LIMIT 50", (s["pcode"], sid)),
+        "mode": live_mode(),
+        "summary": _summary(d["base"][0], d["rain"][sid], d["q"][sid], scenes, d["incidents"]),
+        "rain_hourly": d["rain"][sid], "discharge_daily": d["q"][sid],
+        "scenes": list(reversed(scenes)),
+        "incidents": [i for i in d["incidents"] if i["pcode"] == s["pcode"]
+                      or (i["nearest_settlement_id"] == sid and (i["distance_km"] or 99) <= 10)][:50],
     }
 
 
 @app.get("/api/live/incidents")
-def live_incidents(days: int = Query(30, ge=1, le=365)):
+def live_incidents(response: Response, days: int = Query(30, ge=1, le=365)):
     since = (dt.date.today() - dt.timedelta(days=days)).isoformat()
-    return live_rows("SELECT * FROM incidents WHERE incident_on>=? ORDER BY incident_on DESC", (since,))
+    if live_mode() == "store":
+        return live_rows("SELECT * FROM incidents WHERE incident_on>=? ORDER BY incident_on DESC", (since,))
+    response.headers.update(CDN_CACHE)
+    return [i for i in od.incidents(_base_settlements(), _levels(), MON["incidents"]) if i["incident_on"] >= since]
 
 
 # --- external map layers ---------------------------------------------------------------------
@@ -441,7 +521,8 @@ def gibs_latest():
 if (ROOT / "outputs").is_dir():
     app.mount("/outputs", StaticFiles(directory=ROOT / "outputs"), name="outputs")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
-app.mount("/live_frames", StaticFiles(directory=LIVE_FRAMES), name="live_frames")
+if LIVE_FRAMES.is_dir():   # only where the local updater runs; absent on Vercel
+    app.mount("/live_frames", StaticFiles(directory=LIVE_FRAMES), name="live_frames")
 
 
 @app.get("/")
