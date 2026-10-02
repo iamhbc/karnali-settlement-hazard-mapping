@@ -1,9 +1,11 @@
 """Karnali Settlement Explorer: web dashboard backend (FastAPI + SQLite).
 
-Serves the read-only dashboard database built by dashboard/build_db.py, the repository's
-figures/frames, and the single-page frontend in dashboard/static/.
+Serves the read-only research database built by dashboard/build_db.py, the near-real-time
+monitoring database filled by dashboard/live_update.py, the repository's figures/frames, and
+the single-page frontend in dashboard/static/.
 
-    python dashboard/app.py            # http://127.0.0.1:8050
+    python dashboard/app.py                    # http://127.0.0.1:8050
+    LIVE_UPDATES=1 python dashboard/app.py     # also run the live updater in the background
 """
 from __future__ import annotations
 
@@ -11,7 +13,15 @@ import datetime as dt
 import json
 import os
 import sqlite3
+import statistics
+import threading
+import time
+import xml.etree.ElementTree as ET
+from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.request import Request, urlopen
+
+import yaml
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, PlainTextResponse
@@ -21,12 +31,28 @@ ROOT = Path(__file__).resolve().parents[1]
 DB = ROOT / "dashboard/data/karnali_dashboard.sqlite"
 STATIC = ROOT / "dashboard/static"
 GHSL_FIRST, GHSL_LAST = 1975, 2020
+MON = yaml.safe_load(open(ROOT / "configs/monitoring.yaml"))["monitoring"]
+LIVE_DB = ROOT / MON["database"]
+LIVE_FRAMES = ROOT / MON["frames_dir"]
+LIVE_FRAMES.mkdir(parents=True, exist_ok=True)
 
 SORTS = {"rank": "exposure_rank", "name": "name", "district": "district, name",
          "buildings": "buildings_in_window DESC", "le5": "buildings_le_5m DESC",
          "share5": "share_le_5m DESC", "id": "settlement_id"}
 
-app = FastAPI(title="Karnali Settlement Explorer", docs_url="/api/docs")
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    stop = threading.Event()
+    if os.environ.get("LIVE_UPDATES") == "1":
+        import live_update  # dashboard/live_update.py
+        threading.Thread(target=live_update.loop, kwargs={"stop": stop}, daemon=True).start()
+    yield
+    stop.set()
+
+
+app = FastAPI(title="Karnali Settlement Explorer", docs_url="/api/docs", lifespan=lifespan)
 
 
 def db() -> sqlite3.Connection:
@@ -251,12 +277,171 @@ def province():
     }
 
 
+# --- live monitoring ---------------------------------------------------------------------------
+
+def live_rows(sql: str, args=()) -> list[dict]:
+    if not LIVE_DB.exists():
+        return []
+    con = sqlite3.connect(f"file:{LIVE_DB}?mode=ro", uri=True)
+    con.row_factory = sqlite3.Row
+    try:
+        return [dict(r) for r in con.execute(sql, args)]
+    finally:
+        con.close()
+
+
+def rain_category(mm: float | None) -> str | None:
+    if mm is None:
+        return None
+    label = None
+    for c in MON["rain_24h_categories_mm"]:
+        if mm >= c["min"]:
+            label = c["label"]
+    return label
+
+
+def _rolling_max(vals: list[float], n: int = 24) -> float | None:
+    v = [x or 0 for x in vals]
+    if not v:
+        return None
+    return max(sum(v[i:i + n]) for i in range(max(1, len(v) - n + 1)))
+
+
+def live_settlement_summary(sid: str) -> dict:
+    w = live_rows("SELECT time, precip_mm, kind FROM weather_hourly WHERE settlement_id=? ORDER BY time", (sid,))
+    past = [r["precip_mm"] for r in w if r["kind"] == "past"]
+    fc = [r["precip_mm"] for r in w if r["kind"] == "forecast"]
+    rain24 = round(sum(x or 0 for x in past[-24:]), 1) if past else None
+    fc24 = round(_rolling_max(fc), 1) if fc else None
+    q = live_rows("SELECT date, discharge, kind FROM discharge_daily WHERE settlement_id=? ORDER BY date", (sid,))
+    qp = [r["discharge"] for r in q if r["kind"] == "past" and r["discharge"] is not None]
+    qf = [r["discharge"] for r in q if r["kind"] == "forecast" and r["discharge"] is not None]
+    q_med = statistics.median(qp) if qp else None
+    q_fmax = max(qf) if qf else None
+    sc = live_rows("SELECT collection, acquired, clear_fraction, zone_water_ha FROM scenes WHERE settlement_id=? "
+                   "ORDER BY acquired", (sid,))
+    s1 = [r for r in sc if r["collection"] == "sentinel-1-rtc" and r["zone_water_ha"] is not None]
+    s2 = [r for r in sc if r["collection"] == "sentinel-2-l2a" and (r["clear_fraction"] or 0) >= 0.5]
+    s1_ratio = None
+    if len(s1) >= 3:
+        base = statistics.median(r["zone_water_ha"] for r in s1[:-1])
+        s1_ratio = round(s1[-1]["zone_water_ha"] / base, 2) if base else None
+    since = (dt.date.today() - dt.timedelta(days=30)).isoformat()
+    pcode = rows("SELECT pcode FROM settlements WHERE settlement_id=?", (sid,))[0]["pcode"]
+    inc = live_rows("SELECT COUNT(*) n, MAX(incident_on) last FROM incidents WHERE pcode=? AND incident_on>=?",
+                    (pcode, since))[0] if LIVE_DB.exists() else {"n": 0, "last": None}
+    return {
+        "settlement_id": sid,
+        "rain_past24_mm": rain24, "rain_past24_category": rain_category(rain24),
+        "rain_fc_max24_mm": fc24, "rain_fc_max24_category": rain_category(fc24),
+        "discharge_past30_median": None if q_med is None else round(q_med, 2),
+        "discharge_fc_max": None if q_fmax is None else round(q_fmax, 2),
+        "discharge_fc_ratio": round(q_fmax / q_med, 2) if q_med and q_fmax is not None else None,
+        "s1_latest": s1[-1]["acquired"] if s1 else None,
+        "s1_zone_water_ha": round(s1[-1]["zone_water_ha"], 2) if s1 else None,
+        "s1_water_ratio": s1_ratio,
+        "s2_latest_clear": s2[-1]["acquired"] if s2 else None,
+        "incidents_30d": inc["n"], "incident_last": inc["last"],
+    }
+
+
+@app.get("/api/live/status")
+def live_status():
+    jobs = live_rows("""SELECT job, MAX(finished) finished FROM runs WHERE status='ok' GROUP BY job""")
+    errors = live_rows("""SELECT job, finished, message FROM runs WHERE status='error'
+                          ORDER BY finished DESC LIMIT 5""")
+    return {"available": LIVE_DB.exists(), "last_ok": {j["job"]: j["finished"] for j in jobs},
+            "recent_errors": errors, "schedule_minutes": MON["schedule_minutes"],
+            "auto_update": os.environ.get("LIVE_UPDATES") == "1",
+            "rain_categories": MON["rain_24h_categories_mm"]}
+
+
+@app.get("/api/live/overview")
+def live_overview():
+    base = rows("SELECT settlement_id, name, local_level, district, local_level_type, lat, lon, "
+                "buildings_le_5m, exposure_rank FROM settlements ORDER BY settlement_id")
+    return [{**b, **live_settlement_summary(b["settlement_id"])} for b in base]
+
+
+@app.get("/api/live/settlements/{sid}")
+def live_settlement(sid: str):
+    s = settlement(sid)
+    return {
+        "summary": live_settlement_summary(sid),
+        "rain_hourly": live_rows("SELECT time, precip_mm, kind FROM weather_hourly WHERE settlement_id=? "
+                                 "ORDER BY time", (sid,)),
+        "discharge_daily": live_rows("SELECT date, discharge, discharge_median, discharge_max, kind, cell_lat, "
+                                     "cell_lon FROM discharge_daily WHERE settlement_id=? ORDER BY date", (sid,)),
+        "scenes": live_rows("SELECT * FROM scenes WHERE settlement_id=? ORDER BY acquired DESC", (sid,)),
+        "incidents": live_rows("SELECT * FROM incidents WHERE pcode=? OR (nearest_settlement_id=? AND distance_km<=10) "
+                               "ORDER BY incident_on DESC LIMIT 50", (s["pcode"], sid)),
+    }
+
+
+@app.get("/api/live/incidents")
+def live_incidents(days: int = Query(30, ge=1, le=365)):
+    since = (dt.date.today() - dt.timedelta(days=days)).isoformat()
+    return live_rows("SELECT * FROM incidents WHERE incident_on>=? ORDER BY incident_on DESC", (since,))
+
+
+# --- external map layers ---------------------------------------------------------------------
+
+_tilejson_cache: dict = {}
+
+
+@app.get("/api/tilejson")
+def tilejson(collection: str, item: str):
+    """Planetary Computer tile endpoint for one scene at full resolution (its default rendering)."""
+    key = (collection, item)
+    if key not in _tilejson_cache:
+        url = f"https://planetarycomputer.microsoft.com/api/stac/v1/collections/{collection}/items/{item}"
+        with urlopen(Request(url, headers={"User-Agent": "karnali-dashboard"}), timeout=60) as r:
+            it = json.load(r)
+        tj = it.get("assets", {}).get("tilejson", {}).get("href")
+        if not tj:
+            raise HTTPException(404, "No tile rendering published for this scene")
+        with urlopen(Request(tj, headers={"User-Agent": "karnali-dashboard"}), timeout=60) as r:
+            _tilejson_cache[key] = json.load(r)
+    return _tilejson_cache[key]
+
+
+GIBS_LAYERS = ["VIIRS_NOAA20_CorrectedReflectance_TrueColor", "VIIRS_NOAA21_CorrectedReflectance_TrueColor",
+               "MODIS_Terra_CorrectedReflectance_TrueColor", "HLS_S30_Nadir_BRDF_Adjusted_Reflectance",
+               "HLS_L30_Nadir_BRDF_Adjusted_Reflectance", "OPERA_L3_Dynamic_Surface_Water_Extent-Sentinel-1",
+               "OPERA_L3_Dynamic_Surface_Water_Extent-HLS", "MODIS_Combined_Flood_3-Day",
+               "IMERG_Precipitation_Rate_30min", "OPERA_L3_DIST-ALERT-HLS_Color_Index"]
+_gibs = {"t": 0.0, "data": {}}
+
+
+@app.get("/api/gibs/latest")
+def gibs_latest():
+    """Latest available time, format and zoom for the NASA GIBS layers the map offers (cached 1 h)."""
+    if time.time() - _gibs["t"] > 3600:
+        url = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/1.0.0/WMTSCapabilities.xml"
+        with urlopen(Request(url, headers={"User-Agent": "karnali-dashboard"}), timeout=90) as r:
+            root = ET.parse(r).getroot()
+        ns = {"w": "http://www.opengis.net/wmts/1.0", "ows": "http://www.opengis.net/ows/1.1"}
+        out = {}
+        for lyr in root.iter("{http://www.opengis.net/wmts/1.0}Layer"):
+            i = lyr.find("ows:Identifier", ns).text
+            if i not in GIBS_LAYERS:
+                continue
+            dim = lyr.find("w:Dimension", ns)
+            tms = lyr.find("w:TileMatrixSetLink/w:TileMatrixSet", ns).text
+            out[i] = {"default": dim.find("w:Default", ns).text if dim is not None else None,
+                      "format": lyr.find("w:Format", ns).text, "matrix_set": tms,
+                      "max_zoom": int(tms.rsplit("Level", 1)[1])}
+        _gibs.update(t=time.time(), data=out)
+    return _gibs["data"]
+
+
 # --- files ----------------------------------------------------------------------------------
 
 # On Vercel these are served by the CDN (vercel.json) and left out of the function bundle.
 if (ROOT / "outputs").is_dir():
     app.mount("/outputs", StaticFiles(directory=ROOT / "outputs"), name="outputs")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
+app.mount("/live_frames", StaticFiles(directory=LIVE_FRAMES), name="live_frames")
 
 
 @app.get("/")
@@ -272,6 +457,10 @@ def icon():
 
 
 if __name__ == "__main__":
+    import sys
+
     import uvicorn
+
+    sys.path.insert(0, str(Path(__file__).parent))
 
     uvicorn.run(app, host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", 8050)))
