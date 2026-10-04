@@ -1,0 +1,2 @@
+# Runtime deps for the Vercel function only (the research stack lives in ../requirements.txt)
+fastapi
