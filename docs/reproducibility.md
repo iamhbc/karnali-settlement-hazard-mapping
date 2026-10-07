@@ -2,6 +2,20 @@
 
 Record the environment, configuration files, code or notebook versions, input identifiers, processing parameters, outputs, and known limitations for each analysis. Prefer relative paths and documented transformations.
 
+## Local environment
+
+Use the Conda-forge environment in `environment.yml` (Python 3.12):
+
+```bash
+conda env create -f environment.yml
+conda activate karnali-settlement-hazard-mapping
+make check
+```
+
+The optional `KARNALI_CACHE` variable controls the local cache for downloaded inputs and resumable intermediate results. `.env.example` is a non-secret template; copy it to the ignored `.env`, set the cache path outside the repository, and source it in the shell before running the Make targets. The scripts default to `/tmp/karnali_cache` when the variable is unset. `make fetch-inputs` requires network access. `make screen` and `make compile-screen` write analysis products into repository output/data locations; review the affected paths and preserve research outputs as appropriate before rerunning.
+
+`make check` compiles Python files under `src/` and `analysis/` and parses the environment, configuration, and workflow YAML files. It is a syntax/configuration check, not a scientific validation or a test suite.
+
 ## 79-settlement screening (2026-10-02)
 
 Environment: conda-forge, Python 3.12. The run used geopandas 1.x, rasterio (GDAL 3.13), pystac-client,

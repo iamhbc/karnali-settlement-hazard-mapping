@@ -8,6 +8,20 @@ This repository is a research workspace for the systematic investigation of sett
 
 The repository is designed as a long-term scientific research environment rather than a generic software project. It emphasizes reproducible methods, provenance, metadata, uncertainty documentation, and methodological transparency. Research questions, datasets, and analytical workflows are expected to evolve as additional evidence is acquired and validated.
 
+## Local Developer Setup
+
+The Conda-forge environment in `environment.yml` is the supported setup and uses Python 3.12. From the repository root:
+
+```bash
+conda env create -f environment.yml
+conda activate karnali-settlement-hazard-mapping
+make check
+```
+
+For local data downloads and resumable analysis state, optionally copy `.env.example` to `.env`, edit `KARNALI_CACHE` to a writable location outside the repository, then load it in the current shell with `set -a; . ./.env; set +a`. `.env` is ignored by Git. The current workflows do not require API credentials. `make fetch-inputs` downloads source datasets and therefore requires network access; `make screen` generates screening outputs. To process selected settlement IDs, use `make screen SETTLEMENT_IDS="KAR-SET-001 KAR-SET-002"`. Review source and output paths before running these data-intensive targets.
+
+`make check` performs Python syntax and YAML-configuration/workflow checks without downloading data. The repository does not currently define a test suite.
+
 ## Research Purpose
 
 The project investigates how settlements in Karnali Province have developed and transformed in relation to river systems, streams, and other water-related landscape features, and how geospatial evidence can be used to characterize potential exposure to water-related hazards.

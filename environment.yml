@@ -2,7 +2,7 @@ name: karnali-settlement-hazard-mapping
 channels:
   - conda-forge
 dependencies:
-  - python
+  - python=3.12
   - numpy
   - pandas
   - geopandas
