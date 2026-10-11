@@ -18,3 +18,10 @@ For every source, record provider, URL or citation, license, acquisition date, t
 
 Raw inputs are kept outside Git in a disposable cache (`$KARNALI_CACHE`) and are re-creatable with
 `src/data/fetch_karnali_inputs.py`. Only derived layers, figures and tables are committed.
+
+The structured source register is `data/metadata/datasets.csv`. Scene-specific imagery IDs and
+actual acquisition dates are in `data/metadata/imagery_catalog.csv`; the epoch label is not the
+acquisition date (for example, a 2012 epoch may use a scene acquired in 2013). Where acquisition
+dates, checksums, native CRS, or exact source snapshots were not retained, the register says
+`unknown`. The current data are not independent settlement or flood-event reference observations;
+see [`validation_plan.md`](validation_plan.md).
