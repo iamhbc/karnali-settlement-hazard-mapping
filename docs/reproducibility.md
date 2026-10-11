@@ -21,3 +21,11 @@ python analysis/hazard_exposure/compile_karnali_79.py
 - Overture is pinned to release `2026-09-23.1`. OSM-derived content changes between releases.
 - Per-settlement intermediate results are written to `$KARNALI_CACHE/site_results/`, so the run
   resumes where it stopped.
+- Run `python analysis/hazard_exposure/validate_karnali_79.py` and `pytest -q` to check committed
+  output consistency. Pass `--cache-dir "$KARNALI_CACHE"` to check whether cached GHSL epoch rasters
+  share a grid. The validator does not fetch data and explicitly reports when raster checks are
+  skipped.
+
+The current raw inputs are not committed, the processing log has no run-specific checksums or
+captured environment lock, and streamed imagery can change with upstream catalog availability.
+Therefore this describes the processing method and inputs, but is not bit-for-bit run provenance.
