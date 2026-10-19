@@ -69,6 +69,7 @@ It is an **exposure screening**, not a flood model or a risk-to-life estimate.
 - Report: [`outputs/reports/karnali_79_exposure_screening_report.md`](outputs/reports/karnali_79_exposure_screening_report.md)
 - Table: [`outputs/tables/karnali_79_exposure_screening.csv`](outputs/tables/karnali_79_exposure_screening.csv)
 - Profiles: [`settlements/settlement_profiles/`](settlements/settlement_profiles/)
+- Images by location (District → Urban/Rural → Local level): [`outputs/imagery_by_location/`](outputs/imagery_by_location/README.md)
 - Layers: [`data/processed/karnali_79/`](data/processed/karnali_79/)
 - Method and limits: [`docs/methodology.md`](docs/methodology.md) and [`docs/limitations.md`](docs/limitations.md)
 - Web dashboard: [`dashboard/`](dashboard/README.md). Run `python dashboard/app.py` to search, view and
