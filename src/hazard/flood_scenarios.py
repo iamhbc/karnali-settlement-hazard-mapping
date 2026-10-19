@@ -18,17 +18,16 @@ period, flow velocity, timing, debris, or defence information, and DEM vertical 
 from __future__ import annotations
 
 import numpy as np
-import planetary_computer as pc
-import pystac_client
-from rasterio.enums import Resampling
-from rasterio.features import rasterize
-from scipy import ndimage
 
 from remote_sensing.imagery_timeseries import STAC_URL, read_band
 
 
-def read_dem(bounds, crs: str, res: float) -> np.ndarray:
+def read_dem(bounds, crs: str, res: float) -> tuple[np.ndarray, list[str]]:
     """Copernicus GLO-30 DEM warped to the analysis grid (may span several 1-degree tiles)."""
+    import planetary_computer as pc
+    import pystac_client
+    from rasterio.enums import Resampling
+
     from shapely.geometry import box
     import pyproj
     from shapely.ops import transform as shp_transform
@@ -48,6 +47,8 @@ def read_dem(bounds, crs: str, res: float) -> np.ndarray:
 
 
 def channel_mask(lines, polygons, transform, shape) -> np.ndarray:
+    from rasterio.features import rasterize
+
     shapes = [(g, 1) for g in list(lines) + list(polygons) if g is not None and not g.is_empty]
     if not shapes:
         return np.zeros(shape, dtype=bool)
@@ -60,6 +61,7 @@ def hand(dem: np.ndarray, channels: np.ndarray, transform, crs: str, burn_m: flo
     if not hasattr(np, "in1d"):  # pysheds 0.5 still calls the removed numpy alias
         np.in1d = np.isin
     import pyproj
+    from scipy import ndimage
     from pysheds.grid import Grid
     from pysheds.sview import Raster, ViewFinder
 
