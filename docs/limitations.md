@@ -24,3 +24,20 @@ Maintain a living record of data gaps, imagery differences, georeferencing uncer
   epochs are back-cast by the producer.
 - **Urban/rural type:** taken from a secondary source (Wikipedia citing MoFALD), not checked against the
   current MoFAGA register.
+
+## Live monitoring layer (2026-10-02)
+
+- **Not an early-warning system.** No threshold has been validated against events. Rain categories
+  are IMD terms used as labels. The river and radar ratios are relative indicators with no hydrological
+  calibration.
+- **Model values:** rain and discharge are model output. GloFAS cells (~5 km) can represent a larger
+  river than the khola next to a settlement.
+- **Radar water** (VV < −18 dB) can be confused with smooth surfaces such as fresh tarmac and dry sand,
+  and with radar shadow. Measuring only inside the HAND ≤ 10 m zone reduces but does not remove this.
+  Ratios need several passes to mean anything.
+- **Optical water** (MNDWI > 0) is counted only on clear pixels. Cloud and terrain shadow remain error
+  sources.
+- **BIPAD incidents** are as reported, with variable completeness and location accuracy. The nearest
+  settlement is assigned by distance, not by verified impact.
+- **Latency:** satellite passes every few days and are processed within hours; rain hourly; incidents
+  as reported.

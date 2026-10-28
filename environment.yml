@@ -23,3 +23,5 @@ dependencies:
   - pystac-client
   - planetary-computer
   - pysheds
+  - fastapi
+  - uvicorn

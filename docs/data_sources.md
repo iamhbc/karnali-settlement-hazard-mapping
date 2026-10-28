@@ -18,3 +18,16 @@ For every source, record provider, URL or citation, license, acquisition date, t
 
 Raw inputs are kept outside Git in a disposable cache (`$KARNALI_CACHE`) and are re-creatable with
 `src/data/fetch_karnali_inputs.py`. Only derived layers, figures and tables are committed.
+
+## Near-real-time sources (dashboard Live layer, from 2026-10-02)
+
+| Source | Provider | Access | Licence / terms | Notes |
+|---|---|---|---|---|
+| Hourly precipitation, past and forecast | Open-Meteo (blend of national weather models) | `api.open-meteo.com/v1/forecast`, no key | CC BY 4.0; free for non-commercial use | Model values, not gauges |
+| River discharge (GloFAS v4) | Copernicus EMS GloFAS via Open-Meteo flood API | `flood-api.open-meteo.com/v1/flood` | CC BY 4.0 | ~5 km cells; small kholas not resolved |
+| Disaster incidents | BIPAD portal, NDRRMA / Government of Nepal | `bipadportal.gov.np/api/v1/incident/` | Public API; terms not stated (unknown); cite BIPAD | Filtered to Karnali (province 6) and water-related hazards |
+| Sentinel-1 RTC | ESA Copernicus; RTC processing by Microsoft Planetary Computer | STAC `sentinel-1-rtc` | Copernicus terms; RTC product © Microsoft, CC BY 4.0 | 10 m radar, about every 3–6 days over Karnali |
+| NASA GIBS layers (VIIRS, MODIS, HLS, OPERA DSWx, IMERG, DIST-ALERT, MODIS flood) | NASA EOSDIS | WMTS tiles, no key | NASA open data (no restrictions; attribution requested) | Display only |
+| Basemaps | OpenStreetMap, HOT, CyclOSM, OpenTopoMap, Esri, EOX | XYZ tiles | Per provider (OSM ODbL; OpenTopoMap CC BY-SA; EOX s2cloudless 2023 CC BY-NC-SA 4.0; Esri terms for non-commercial display) | Display only, not redistributed |
+| JRC Global Surface Water | European Commission JRC | XYZ tiles | CC BY 4.0 | Water occurrence 1984–2021 |
+| DHM real-time hydro-met | Department of Hydrology and Meteorology | API requires a key | unknown | Not used yet |
