@@ -17,6 +17,7 @@
   </div>
   <nav class="views" role="tablist">
     <button role="tab" data-view="explorer" class="active">Explorer</button>
+    <button role="tab" data-view="live">Live monitoring</button>
     <button role="tab" data-view="province">Province overview</button>
     <button role="tab" data-view="about">Method &amp; sources</button>
   </nav>
@@ -65,6 +66,7 @@
         </div>
         <nav class="tabs" role="tablist">
           <button data-tab="timeline" class="active">Timeline</button>
+          <button data-tab="live">Live now</button>
           <button data-tab="compare">Compare</button>
           <button data-tab="trends">Trends</button>
           <button data-tab="flood">Low-ground scenarios</button>
@@ -88,6 +90,24 @@
           </div>
         </div>
 
+
+        <div class="tab" id="tab-live" hidden>
+          <div class="live-note">Near-real-time screening data, <b>not an official warning</b>. For flood and weather warnings follow
+            <a href="https://www.hydrology.gov.np" target="_blank" rel="noopener">DHM Nepal</a> and
+            <a href="https://bipadportal.gov.np" target="_blank" rel="noopener">BIPAD / NDRRMA</a>.</div>
+          <div id="l-cards" class="stats live-cards"></div>
+          <div class="charts">
+            <figure class="chart"><figcaption>Rainfall, hourly (mm): past 3 days and 3-day forecast · Open-Meteo model</figcaption><div class="cw"><canvas id="ch-rain"></canvas></div></figure>
+            <figure class="chart"><figcaption>River discharge, daily (m³/s): past 30 days and 7-day forecast · GloFAS</figcaption><div class="cw"><canvas id="ch-q"></canvas></div></figure>
+          </div>
+          <p class="muted small" id="l-qnote"></p>
+          <h4>Latest satellite passes over this settlement</h4>
+          <p class="muted small">Sentinel-1 radar sees through cloud: dark = smooth surface or water; blue = open water inside the HAND ≤ 10 m low-ground zone.
+            Sentinel-2 is optical (true colour). Click "Full resolution on map" to see the whole scene as map tiles.</p>
+          <div id="l-scenes" class="scene-grid"></div>
+          <h4>Recorded incidents nearby (BIPAD, last 12 months)</h4>
+          <div id="l-incidents"></div>
+        </div>
         <div class="tab" id="tab-compare" hidden>
           <div class="row controls">
             <label>From <select id="c-a"></select></label>
@@ -139,6 +159,20 @@
   </section>
 </main>
 
+
+<main id="view-live" class="view live" hidden>
+  <div class="live-note"><b>Live monitoring · not an official warning system.</b> Rain and river values are model output (Open-Meteo, GloFAS); satellite
+    indicators are automated screening; incidents are as reported to BIPAD. For warnings follow
+    <a href="https://www.hydrology.gov.np" target="_blank" rel="noopener">DHM Nepal</a> and <a href="https://bipadportal.gov.np" target="_blank" rel="noopener">BIPAD / NDRRMA</a>.</div>
+  <div id="live-status" class="muted small"></div>
+  <div class="cards" id="live-cards"></div>
+  <h3>All 79 settlements now</h3>
+  <p class="muted small">Click a column to sort and a row to open that settlement. The rain category labels the 24 h amount using India Meteorological Department terms (labels only).
+    The river ratio is the 7-day forecast maximum divided by the past-30-day median for the ~5 km GloFAS cell. The radar water ratio compares the latest Sentinel-1 water area in the low-ground zone with the median of earlier passes.</p>
+  <div id="live-table" class="table-wrap"></div>
+  <h3>Recent water-related incidents in Karnali (BIPAD, 30 days)</h3>
+  <div id="live-incidents" class="table-wrap"></div>
+</main>
 <main id="view-province" class="view province" hidden>
   <div class="cards" id="prov-cards"></div>
   <div class="charts two">

@@ -53,3 +53,7 @@ secrets*
 
 # Approved small derived vector layers (79-settlement screening; documented in docs/data_sources.md)
 !data/processed/karnali_79/*.geojson
+
+# Live monitoring state (dynamic; rebuilt by dashboard/live_update.py)
+dashboard/data/live.sqlite*
+dashboard/data/live_frames/
