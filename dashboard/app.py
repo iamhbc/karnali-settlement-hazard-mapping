@@ -451,7 +451,7 @@ def live_settlement(sid: str, response: Response):
         "rain_hourly": d["rain"][sid], "discharge_daily": d["q"][sid],
         "scenes": list(reversed(scenes)),
         "incidents": [i for i in d["incidents"] if i["pcode"] == s["pcode"]
-                      or (i["nearest_settlement_id"] == sid and (i["distance_km"] or 99) <= 10)][:50],
+                      or (i["nearest_settlement_id"] == sid and i["distance_km"] is not None and i["distance_km"] <= 10)][:50],
     }
 
 
