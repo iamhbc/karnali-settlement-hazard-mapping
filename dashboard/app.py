@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import math
 import os
 import sqlite3
 import statistics
@@ -139,12 +140,13 @@ def local_levels():
 # --- comparison ----------------------------------------------------------------------------
 
 def ghsl_at(series: list[dict], year: float, col: str) -> tuple[float | None, str]:
-    """Linear interpolation of GHSL built-up at `year`, clamped to the 1975-2020 epochs."""
-    pts = [(r["year"], r[col]) for r in series if r[col] is not None]
+    """Linear interpolation of GHSL built-up, clamped to available observation epochs."""
+    pts = sorted((r["year"], r[col]) for r in series if r[col] is not None)
     if not pts:
         return None, "no GHSL data"
-    y = min(max(year, GHSL_FIRST), GHSL_LAST)
-    note = "" if GHSL_FIRST <= year <= GHSL_LAST else f"clamped to GHSL {int(y)}"
+    first, last = pts[0][0], pts[-1][0]
+    y = min(max(year, first), last)
+    note = "" if first <= year <= last else f"clamped to GHSL {int(y)}"
     for (y0, v0), (y1, v1) in zip(pts, pts[1:]):
         if y0 <= y <= y1:
             return v0 + (v1 - v0) * (y - y0) / (y1 - y0), note
@@ -315,11 +317,13 @@ def rain_category(mm: float | None) -> str | None:
     return label
 
 
-def _rolling_max(vals: list[float], n: int = 24) -> float | None:
-    v = [x or 0 for x in vals]
-    if not v:
+def _rolling_max(vals: list[float | None], n: int = 24) -> float | None:
+    """Maximum complete-window total; missing observations are not dry hours."""
+    if n < 1:
+        raise ValueError("Window size must be positive")
+    if len(vals) < n or any(x is None or not math.isfinite(x) for x in vals):
         return None
-    return max(sum(v[i:i + n]) for i in range(max(1, len(v) - n + 1)))
+    return max(sum(vals[i:i + n]) for i in range(len(vals) - n + 1))
 
 
 def _base_settlements() -> list[dict]:
@@ -367,8 +371,10 @@ def _live_data(sid: str | None = None) -> dict:
 def _summary(b: dict, rain: list, q: list, scenes: list, incidents: list) -> dict:
     past = [r["precip_mm"] for r in rain if r["kind"] == "past"]
     fc = [r["precip_mm"] for r in rain if r["kind"] == "forecast"]
-    rain24 = round(sum(x or 0 for x in past[-24:]), 1) if past else None
-    fc24 = round(_rolling_max(fc), 1) if fc else None
+    rain24 = _rolling_max(past[-24:])
+    fc24 = _rolling_max(fc)
+    rain24 = round(rain24, 1) if rain24 is not None else None
+    fc24 = round(fc24, 1) if fc24 is not None else None
     qp = [r["discharge"] for r in q if r["kind"] == "past" and r["discharge"] is not None]
     qf = [r["discharge"] for r in q if r["kind"] == "forecast" and r["discharge"] is not None]
     q_med = statistics.median(qp) if qp else None
