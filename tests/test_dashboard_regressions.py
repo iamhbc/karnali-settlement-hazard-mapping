@@ -66,3 +66,41 @@ def test_live_settlement_includes_incidents_at_zero_distance(monkeypatch):
     })
     result = dashboard.live_settlement("s1", Response())
     assert [row["id"] for row in result["incidents"]] == ["at-site", "boundary", "same-region"]
+
+
+@pytest.mark.parametrize("values", [[None] * 24, [1.0] * 23, [1.0] * 23 + [None], [float("nan")] * 24, [float("inf")] * 24])
+def test_incomplete_rainfall_is_unknown(values):
+    rain = [{"kind": kind, "precip_mm": value} for kind in ("past", "forecast") for value in values]
+    result = dashboard._summary({"settlement_id": "s1", "pcode": "region"}, rain, [], [], [])
+    for key in ("rain_past24_mm", "rain_past24_category", "rain_fc_max24_mm", "rain_fc_max24_category"):
+        assert result[key] is None
+
+
+def test_complete_rainfall_retains_zero_and_rolling_totals():
+    assert dashboard._rolling_max([0.0] * 24) == 0
+    assert dashboard._rolling_max([1.0] * 24 + [2.0] * 24) == 48
+    rain = [{"kind": "past", "precip_mm": value} for value in [None] + [0.0] * 24]
+    result = dashboard._summary({"settlement_id": "s1", "pcode": "region"}, rain, [], [], [])
+    assert result["rain_past24_mm"] == 0
+    assert result["rain_fc_max24_mm"] is None
+
+
+def test_sparse_ghsl_clamps_to_first_available_epoch():
+    series = [{"year": 1990, "built": 10}, {"year": 2020, "built": 40}]
+    assert dashboard.ghsl_at(series, 1975, "built") == (10, "clamped to GHSL 1990")
+
+
+def test_ghsl_interpolation_is_independent_of_row_order():
+    series = [{"year": 2020, "built": 40}, {"year": 1990, "built": 10}]
+    assert dashboard.ghsl_at(series, 2005, "built") == (25, "")
+
+
+def test_ghsl_missing_and_single_epoch_values():
+    assert dashboard.ghsl_at([{ "year": 1975, "built": None}], 2000, "built") == (None, "no GHSL data")
+    assert dashboard.ghsl_at([{ "year": 2000, "built": 12}], 2020, "built") == (12, "clamped to GHSL 2000")
+
+
+def test_ghsl_complete_epoch_range_is_preserved():
+    series = [{"year": 1975, "built": 0}, {"year": 2020, "built": 45}]
+    assert dashboard.ghsl_at(series, 2000, "built") == (25, "")
+    assert dashboard.ghsl_at(series, 2025, "built") == (45, "clamped to GHSL 2020")
