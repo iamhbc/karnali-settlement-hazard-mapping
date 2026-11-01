@@ -17,7 +17,7 @@ import statistics
 import threading
 import time
 import xml.etree.ElementTree as ET
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, closing
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -63,7 +63,7 @@ def db() -> sqlite3.Connection:
 
 
 def rows(sql: str, args=()) -> list[dict]:
-    with db() as con:
+    with closing(db()) as con:
         return [dict(r) for r in con.execute(sql, args)]
 
 
