@@ -14,6 +14,7 @@ when requested and kept in an in-process cache; app.py also sets CDN cache heade
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import math
 import threading
@@ -222,7 +223,11 @@ def scene_metrics(item, zone_feature, zone_area_ha, thr_db):
                         note="MNDWI > 0 on clear pixels inside HAND <= 10 m zone (server-side)")
         except Exception as e:
             return dict(clear_fraction=None, zone_water_ha=None, note=f"metrics unavailable: {type(e).__name__}")
-    return cached(("metrics", item["id"], zone_area_ha), 12 * 3600, fetch)
+    geometry_key = hashlib.sha256(
+        json.dumps(zone_feature, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    return cached(("metrics", item["collection"], item["id"], geometry_key, zone_area_ha, thr_db),
+                  12 * 3600, fetch)
 
 
 def scenes_for(settlement, items):
