@@ -16,13 +16,12 @@ from __future__ import annotations
 
 import datetime as dt
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
-import planetary_computer as pc
-import pystac_client
-import rasterio
-from rasterio.enums import Resampling
-from rasterio.vrt import WarpedVRT
+
+if TYPE_CHECKING:
+    import pystac_client
 
 STAC_URL = "https://planetarycomputer.microsoft.com/api/stac/v1"
 
@@ -83,8 +82,14 @@ def bad_mask(collection: str, qa: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return obscured & ~nodata, nodata
 
 
-def read_band(href: str, bounds, crs: str, res: float, resampling=Resampling.bilinear) -> np.ndarray:
+def read_band(href: str, bounds, crs: str, res: float, resampling=None) -> np.ndarray:
     """Read a band warped onto the chip grid (bounds in ``crs``) at ``res`` metres."""
+    import rasterio
+    from rasterio.enums import Resampling
+    from rasterio.vrt import WarpedVRT
+
+    if resampling is None:
+        resampling = Resampling.bilinear
     w = int(round((bounds[2] - bounds[0]) / res))
     h = int(round((bounds[3] - bounds[1]) / res))
     transform = rasterio.transform.from_bounds(*bounds, w, h)
@@ -101,6 +106,8 @@ def in_season(d: dt.datetime, months: list[int]) -> bool:
 def best_chip(catalog: pystac_client.Client, epoch: Epoch, lonlat: tuple[float, float],
               bounds, crs: str, months: list[int], max_candidates: int,
               max_cloud: float, max_nodata: float) -> Chip | None:
+    import planetary_computer as pc
+
     spec = SENSORS[epoch.collection]
     items = catalog.search(collections=[epoch.collection],
                            intersects={"type": "Point", "coordinates": list(lonlat)},
@@ -150,6 +157,8 @@ def best_chip(catalog: pystac_client.Client, epoch: Epoch, lonlat: tuple[float, 
 
 
 def open_catalog() -> pystac_client.Client:
+    import pystac_client
+
     return pystac_client.Client.open(STAC_URL)
 
 
